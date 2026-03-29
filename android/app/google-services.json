@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "87991019896",
+    "project_id": "volunteermatch-73b1d",
+    "storage_bucket": "volunteermatch-73b1d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:87991019896:android:10b8fca4f4c36fc03fc08d",
+        "android_client_info": {
+          "package_name": "com.example.volunteer_match"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCXb_ISPeAoeGQkJu6x-uneV9rLQf1M35c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
