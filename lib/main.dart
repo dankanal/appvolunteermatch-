@@ -874,6 +874,8 @@ class _IntroTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 760;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       decoration: BoxDecoration(
@@ -887,99 +889,143 @@ class _IntroTopBar extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
-        children: [
-          // ЛОГО
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: const Color(0xFFA8E932),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(Icons.eco, color: Color(0xFF12203A)),
-          ),
-
-          const SizedBox(width: 12),
-
-          const Expanded(
-            child: Column(
+      child: isMobile
+          ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Volunteer Match',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF101B36),
+                Row(
+                  children: [
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFA8E932),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Icon(Icons.eco, color: Color(0xFF12203A)),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Volunteer Match',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF101B36),
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Помощь рядом, когда она нужна',
+                            style: TextStyle(
+                              color: Color(0xFF667085),
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    TextButton(
+                      onPressed: onOpenWebsite,
+                      child: const Text('Сайт'),
+                    ),
+                    OutlinedButton(
+                      onPressed: onLogin,
+                      child: const Text('Войти'),
+                    ),
+                    FilledButton(
+                      onPressed: onRegister,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF0F1933),
+                        foregroundColor: Colors.white,
+                      ),
+                      child: const Text('Регистрация'),
+                    ),
+                    FilledButton(
+                      onPressed: onDownloadApk,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFFA8E932),
+                        foregroundColor: Colors.black,
+                      ),
+                      child: const Text('APK'),
+                    ),
+                  ],
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFA8E932),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(Icons.eco, color: Color(0xFF12203A)),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Volunteer Match',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF101B36),
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Помощь рядом, когда она нужна',
+                        style: TextStyle(
+                          color: Color(0xFF667085),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                SizedBox(height: 2),
-                Text(
-                  'Помощь рядом, когда она нужна',
-                  style: TextStyle(
-                    color: Color(0xFF667085),
+                TextButton(
+                  onPressed: onOpenWebsite,
+                  child: const Text('Сайт'),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton(
+                  onPressed: onLogin,
+                  child: const Text('Войти'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: onRegister,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF0F1933),
+                    foregroundColor: Colors.white,
                   ),
+                  child: const Text('Регистрация'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: onDownloadApk,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFA8E932),
+                    foregroundColor: Colors.black,
+                  ),
+                  child: const Text('APK'),
                 ),
               ],
             ),
-          ),
-
-          // КНОПКИ СПРАВА
-
-          TextButton(
-            onPressed: onOpenWebsite,
-            child: const Text('Сайт'),
-          ),
-
-          const SizedBox(width: 8),
-
-          // ВОЙТИ
-          OutlinedButton(
-            onPressed: onLogin,
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-              side: const BorderSide(color: Color(0xFFCBD5E1)),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: const Text('Войти'),
-          ),
-
-          const SizedBox(width: 8),
-
-          // РЕГИСТРАЦИЯ
-          FilledButton(
-            onPressed: onRegister,
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF0F1933),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: const Text('Регистрация'),
-          ),
-
-          const SizedBox(width: 8),
-
-          // APK
-          FilledButton(
-            onPressed: onDownloadApk,
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFA8E932),
-              foregroundColor: Colors.black,
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: const Text('APK'),
-          ),
-        ],
-      ),
     );
   }
 }
