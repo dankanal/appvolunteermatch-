@@ -26,7 +26,6 @@ import 'package:http/http.dart' as http;
 import 'dart:html' as html;
 
 
-
 class CloudinaryImageService {
   final ImagePicker _picker = ImagePicker();
 
@@ -396,12 +395,72 @@ class VolunteerMatchApp extends StatelessWidget {
       title: 'Volunteer Match',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
+        useMaterial3: true,
+        scaffoldBackgroundColor: const Color(0xFFF7FAF4),
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF7ED957), // салатовый
+          seedColor: const Color(0xFF7FBF3F),
           brightness: Brightness.light,
         ),
-        scaffoldBackgroundColor: Colors.white,
-        useMaterial3: true,
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          centerTitle: false,
+          foregroundColor: Color(0xFF091633),
+        ),
+        cardTheme: CardThemeData(
+          color: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 18,
+            vertical: 16,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide: const BorderSide(
+              color: Color(0xFF7FBF3F),
+              width: 1.5,
+            ),
+          ),
+        ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF466E2D),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(
+              horizontal: 18,
+              vertical: 16,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 18,
+              vertical: 16,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+          ),
+        ),
       ),
       home: const AuthGate(),
     );
@@ -637,17 +696,70 @@ class _LeafSpinnerState extends State<LeafSpinner>
   }
 }
 
-class AuthGate extends StatelessWidget {
+class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
 
   @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  bool _checkedSession = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _prepareSession();
+  }
+
+  Future<void> _prepareSession() async {
+    final auth = FirebaseAuth.instance;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final savedAt = html.window.localStorage['vm_login_time'];
+
+    if (auth.currentUser == null) {
+      html.window.localStorage.remove('vm_login_time');
+    } else if (savedAt == null) {
+      html.window.localStorage['vm_login_time'] = now.toString();
+    } else {
+      final loginTime = int.tryParse(savedAt) ?? now;
+      final diffMs = now - loginTime;
+      final hours48 = const Duration(hours: 48).inMilliseconds;
+
+      if (diffMs > hours48) {
+        await auth.signOut();
+        html.window.localStorage.remove('vm_login_time');
+      }
+    }
+
+    if (!mounted) return;
+    setState(() => _checkedSession = true);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (!_checkedSession) {
+      return const Scaffold(
+        body: Stack(
+          children: [
+            FallingLeavesBackground(),
+            Center(child: LeafSpinner(size: 42)),
+          ],
+        ),
+      );
+    }
+
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.userChanges(),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
           return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
+            body: Stack(
+              children: [
+                FallingLeavesBackground(),
+                Center(child: LeafSpinner(size: 42)),
+              ],
+            ),
           );
         }
 
@@ -663,198 +775,6 @@ class AuthGate extends StatelessWidget {
 
         return const MainShell();
       },
-    );
-  }
-}
-
-class IntroGate extends StatefulWidget {
-  const IntroGate({super.key});
-
-  @override
-  State<IntroGate> createState() => _IntroGateState();
-}
-
-class _IntroGateState extends State<IntroGate> {
-  bool _loading = true;
-  bool _showAuth = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadIntroState();
-  }
-
-  Future<void> _loadIntroState() async {
-    final prefs = await SharedPreferences.getInstance();
-    final seen = prefs.getBool('intro_seen') ?? false;
-
-    if (!mounted) return;
-    setState(() {
-      _showAuth = seen;
-      _loading = false;
-    });
-  }
-
-  Future<void> _openAuth() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('intro_seen', true);
-
-    if (!mounted) return;
-    setState(() {
-      _showAuth = true;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (_showAuth) {
-      return const EmailAuthScreen();
-    }
-
-    return IntroScreen(
-      onOpenApp: _openAuth,
-    );
-  }
-}
-
-class IntroScreen extends StatelessWidget {
-  final VoidCallback onOpenApp;
-
-  const IntroScreen({
-    super.key,
-    required this.onOpenApp,
-  });
-
-  Future<void> _openLanding() async {
-    final uri = Uri.parse('https://volunteermatch1.netlify.app/');
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
-  }
-
-  Future<void> _downloadApk() async {
-    final uri = Uri.parse('https://volunteermatch1.netlify.app/');
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isWide = MediaQuery.of(context).size.width > 900;
-
-    return Scaffold(
-      backgroundColor: const Color(0xFFF4F8EA),
-      body: Stack(
-        children: [
-          const Positioned.fill(child: _IntroBackground()),
-          SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1180),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _IntroTopBar(
-                        onOpenWebsite: _openLanding,
-                        onDownloadApk: _downloadApk,
-                        onLogin: onOpenApp,
-                        onRegister: () {
-                          onOpenApp();
-                        },
-                      ),
-                      const SizedBox(height: 28),
-                      isWide
-                          ? Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                Expanded(
-                                  child: _IntroHero(
-                                    onOpenApp: onOpenApp,
-                                    onDownloadApk: _downloadApk,
-                                  ),
-                                ),
-                                const SizedBox(width: 28),
-                                const Expanded(
-                                  child: _PhonePreviewCard(),
-                                ),
-                              ],
-                            )
-                          : Column(
-                              children: [
-                                _IntroHero(
-                                  onOpenApp: onOpenApp,
-                                  onDownloadApk: _downloadApk,
-                                ),
-                                const SizedBox(height: 24),
-                                const _PhonePreviewCard(),
-                              ],
-                            ),
-                      const SizedBox(height: 28),
-                      const _SectionTitle('Почему это удобно'),
-                      const SizedBox(height: 16),
-                      Wrap(
-                        spacing: 16,
-                        runSpacing: 16,
-                        children: const [
-                          _FeatureCard(
-                            icon: Icons.place_outlined,
-                            title: 'Рядом',
-                            text: 'Помощь и волонтёры поблизости.',
-                          ),
-                          _FeatureCard(
-                            icon: Icons.shield_outlined,
-                            title: 'Безопасно',
-                            text: 'Профиль, рейтинг и прозрачная активность.',
-                          ),
-                          _FeatureCard(
-                            icon: Icons.flash_on_outlined,
-                            title: 'Быстро',
-                            text: 'Быстрые отклики и удобный чат.',
-                          ),
-                          _FeatureCard(
-                            icon: Icons.workspace_premium_outlined,
-                            title: 'Полезно',
-                            text: 'Достижения, активность и история помощи.',
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 28),
-                      const _SectionTitle('Как это работает'),
-                      const SizedBox(height: 16),
-                      const _StepTile(
-                        index: '1',
-                        title: 'Создай заявку',
-                        text: 'Опиши, какая помощь нужна и где ты находишься.',
-                      ),
-                      const _StepTile(
-                        index: '2',
-                        title: 'Получи отклик',
-                        text: 'Волонтёр рядом увидит заявку и откликнется.',
-                      ),
-                      const _StepTile(
-                        index: '3',
-                        title: 'Общайся в чате',
-                        text: 'Договоритесь о деталях прямо внутри приложения.',
-                      ),
-                      const _StepTile(
-                        index: '4',
-                        title: 'Заверши и оцени',
-                        text: 'После помощи можно поставить оценку и получить достижения.',
-                      ),
-                      const SizedBox(height: 32),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -1029,6 +949,392 @@ class _IntroTopBar extends StatelessWidget {
     );
   }
 }
+
+
+
+class IntroScreen extends StatelessWidget {
+  final VoidCallback onOpenApp;
+  final VoidCallback onLogin;
+  final VoidCallback onRegister;
+
+  const IntroScreen({
+    super.key,
+    required this.onOpenApp,
+    required this.onLogin,
+    required this.onRegister,
+  });
+
+  Future<void> _openLanding() async {
+    final uri = Uri.parse('https://volunteermatch1.netlify.app/');
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _downloadApk() async {
+    final uri = Uri.parse('https://volunteermatch1.netlify.app/');
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isWide = MediaQuery.of(context).size.width > 900;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF4F8EA),
+      body: Stack(
+        children: [
+          const Positioned.fill(
+            child: FallingLeavesBackground(dense: true),
+          ),
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1180),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _IntroTopBar(
+                        onOpenWebsite: _openLanding,
+                        onDownloadApk: _downloadApk,
+                        onLogin: onLogin,
+                        onRegister: onRegister,
+                      ),
+                      const SizedBox(height: 28),
+                      isWide
+                          ? Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Expanded(
+                                  child: _IntroHero(
+                                    onOpenApp: onOpenApp,
+                                    onDownloadApk: _downloadApk,
+                                  ),
+                                ),
+                                const SizedBox(width: 28),
+                                const Expanded(
+                                  child: _PhonePreviewCard(),
+                                ),
+                              ],
+                            )
+                          : Column(
+                              children: [
+                                _IntroHero(
+                                  onOpenApp: onOpenApp,
+                                  onDownloadApk: _downloadApk,
+                                ),
+                                const SizedBox(height: 24),
+                                const _PhonePreviewCard(),
+                              ],
+                            ),
+                      const SizedBox(height: 28),
+                      const _SectionTitle('Почему это удобно'),
+                      const SizedBox(height: 16),
+                      Wrap(
+                        spacing: 16,
+                        runSpacing: 16,
+                        children: const [
+                          _FeatureCard(
+                            icon: Icons.place_outlined,
+                            title: 'Рядом',
+                            text: 'Помощь и волонтёры поблизости.',
+                          ),
+                          _FeatureCard(
+                            icon: Icons.shield_outlined,
+                            title: 'Безопасно',
+                            text: 'Профиль, рейтинг и прозрачная активность.',
+                          ),
+                          _FeatureCard(
+                            icon: Icons.flash_on_outlined,
+                            title: 'Быстро',
+                            text: 'Быстрые отклики и удобный чат.',
+                          ),
+                          _FeatureCard(
+                            icon: Icons.workspace_premium_outlined,
+                            title: 'Полезно',
+                            text: 'Достижения, активность и история помощи.',
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 28),
+                      const _SectionTitle('Как это работает'),
+                      const SizedBox(height: 16),
+                      const _StepTile(
+                        index: '1',
+                        title: 'Создай заявку',
+                        text: 'Опиши, какая помощь нужна и где ты находишься.',
+                      ),
+                      const _StepTile(
+                        index: '2',
+                        title: 'Получи отклик',
+                        text: 'Волонтёр рядом увидит заявку и откликнется.',
+                      ),
+                      const _StepTile(
+                        index: '3',
+                        title: 'Общайся в чате',
+                        text: 'Договоритесь о деталях прямо внутри приложения.',
+                      ),
+                      const _StepTile(
+                        index: '4',
+                        title: 'Заверши и оцени',
+                        text: 'После помощи можно поставить оценку и получить достижения.',
+                      ),
+                      const SizedBox(height: 32),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
+class AppLocationResult {
+  final double? lat;
+  final double? lng;
+  final String? city;
+  final String? error;
+
+  const AppLocationResult({
+    this.lat,
+    this.lng,
+    this.city,
+    this.error,
+  });
+
+  bool get ok => lat != null && lng != null && error == null;
+}
+
+class AppLocationService {
+  Future<AppLocationResult> getCurrentLocationWithCity() async {
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        return const AppLocationResult(
+          error: 'Геолокация на устройстве выключена',
+        );
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.denied) {
+        return const AppLocationResult(
+          error: 'Доступ к геолокации запрещён',
+        );
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        return const AppLocationResult(
+          error: 'Доступ к геолокации навсегда запрещён в настройках браузера/телефона',
+        );
+      }
+
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      String city = 'Неизвестно';
+
+      try {
+        final placemarks = await placemarkFromCoordinates(
+          pos.latitude,
+          pos.longitude,
+        );
+
+        if (placemarks.isNotEmpty) {
+          final p = placemarks.first;
+          city = [
+            p.locality,
+            p.subAdministrativeArea,
+            p.administrativeArea,
+          ].firstWhere(
+            (e) => e != null && e.trim().isNotEmpty,
+            orElse: () => 'Неизвестно',
+          )!;
+        }
+      } catch (_) {
+        city = 'Неизвестно';
+      }
+
+      return AppLocationResult(
+        lat: pos.latitude,
+        lng: pos.longitude,
+        city: city,
+      );
+    } catch (e) {
+      return AppLocationResult(
+        error: 'Ошибка геолокации: $e',
+      );
+    }
+  }
+}
+
+enum AppNoticeType {
+  success,
+  error,
+  info,
+}
+
+class AppNotice {
+  static OverlayEntry? _currentEntry;
+
+  static void show(
+    BuildContext context, {
+    required String message,
+    AppNoticeType type = AppNoticeType.info,
+    Duration duration = const Duration(seconds: 2),
+  }) {
+    _currentEntry?.remove();
+    _currentEntry = null;
+
+    final overlay = Overlay.of(context);
+    if (overlay == null) return;
+
+    final color = switch (type) {
+      AppNoticeType.success => const Color(0xFF1E8E3E),
+      AppNoticeType.error => const Color(0xFFD93025),
+      AppNoticeType.info => const Color(0xFF0F1933),
+    };
+
+    final icon = switch (type) {
+      AppNoticeType.success => Icons.check_circle_rounded,
+      AppNoticeType.error => Icons.error_rounded,
+      AppNoticeType.info => Icons.info_rounded,
+    };
+
+    final entry = OverlayEntry(
+      builder: (context) => _AppNoticeOverlay(
+        message: message,
+        color: color,
+        icon: icon,
+      ),
+    );
+
+    _currentEntry = entry;
+    overlay.insert(entry);
+
+    Future.delayed(duration, () {
+      if (_currentEntry == entry) {
+        entry.remove();
+        _currentEntry = null;
+      }
+    });
+  }
+}
+
+
+class _AppNoticeOverlay extends StatefulWidget {
+  final String message;
+  final Color color;
+  final IconData icon;
+
+  const _AppNoticeOverlay({
+    required this.message,
+    required this.color,
+    required this.icon,
+  });
+
+  @override
+  State<_AppNoticeOverlay> createState() => _AppNoticeOverlayState();
+}
+
+class _AppNoticeOverlayState extends State<_AppNoticeOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _fade;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+    )..forward();
+
+    _fade = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOut,
+    );
+
+    _scale = Tween<double>(begin: 0.92, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeOutBack,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Material(
+        color: Colors.black.withOpacity(0.18),
+        child: Center(
+          child: FadeTransition(
+            opacity: _fade,
+            child: ScaleTransition(
+              scale: _scale,
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 360),
+                margin: const EdgeInsets.symmetric(horizontal: 24),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 16,
+                ),
+                decoration: BoxDecoration(
+                  color: widget.color.withOpacity(0.96),
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x26000000),
+                      blurRadius: 24,
+                      offset: Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(widget.icon, color: Colors.white, size: 24),
+                    const SizedBox(width: 12),
+                    Flexible(
+                      child: Text(
+                        widget.message,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 
 class _IntroHero extends StatelessWidget {
   final VoidCallback onOpenApp;
@@ -1565,8 +1871,79 @@ class _BottomMiniCard extends StatelessWidget {
 }
 
 
+class IntroGate extends StatefulWidget {
+  const IntroGate({super.key});
+
+  @override
+  State<IntroGate> createState() => _IntroGateState();
+}
+
+class _IntroGateState extends State<IntroGate> {
+  bool _loading = true;
+  bool _showAuth = false;
+  bool _startInLoginMode = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadIntroState();
+  }
+
+  Future<void> _loadIntroState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final seen = prefs.getBool('intro_seen') ?? false;
+
+    if (!mounted) return;
+    setState(() {
+      _showAuth = seen;
+      _loading = false;
+    });
+  }
+
+  Future<void> _openAuth({required bool loginMode}) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('intro_seen', true);
+
+    if (!mounted) return;
+    setState(() {
+      _startInLoginMode = loginMode;
+      _showAuth = true;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        body: Stack(
+          children: [
+            FallingLeavesBackground(),
+            Center(child: LeafSpinner(size: 34)),
+          ],
+        ),
+      );
+    }
+
+    if (_showAuth) {
+      return EmailAuthScreen(initialIsLogin: _startInLoginMode);
+    }
+
+    return IntroScreen(
+      onOpenApp: () => _openAuth(loginMode: true),
+      onLogin: () => _openAuth(loginMode: true),
+      onRegister: () => _openAuth(loginMode: false),
+    );
+  }
+}
+
+
 class EmailAuthScreen extends StatefulWidget {
-  const EmailAuthScreen({super.key});
+  final bool initialIsLogin;
+
+  const EmailAuthScreen({
+    super.key,
+    this.initialIsLogin = true,
+  });
 
   @override
   State<EmailAuthScreen> createState() => _EmailAuthScreenState();
@@ -1576,8 +1953,14 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
   final _email = TextEditingController();
   final _pass = TextEditingController();
 
-  bool _isLogin = true;
+  late bool _isLogin;
   bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _isLogin = widget.initialIsLogin;
+  }
 
   @override
   void dispose() {
@@ -1634,10 +2017,10 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
     final pass = _pass.text.trim();
 
     if (!email.contains('@') || pass.length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Email нормальный, пароль минимум 6 символов'),
-        ),
+      AppNotice.show(
+        context,
+        message: 'Email нормальный, пароль минимум 6 символов',
+        type: AppNoticeType.error,
       );
       return;
     }
@@ -1662,10 +2045,10 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
 
         if (refreshedUser != null && !refreshedUser.emailVerified) {
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Почта ещё не подтверждена. Проверь письмо.'),
-            ),
+          AppNotice.show(
+            context,
+            message: 'Почта ещё не подтверждена. Проверь письмо.',
+            type: AppNoticeType.info,
           );
         }
       } else {
@@ -1683,52 +2066,30 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
         await FirebaseAuth.instance.currentUser?.reload();
 
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Аккаунт создан. Письмо для подтверждения отправлено.'),
-          ),
+        AppNotice.show(
+          context,
+          message: 'Аккаунт создан. Письмо для подтверждения отправлено.',
+          type: AppNoticeType.success,
         );
       }
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message ?? e.code)),
+      AppNotice.show(
+        context,
+        message: e.message ?? e.code,
+        type: AppNoticeType.error,
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
+      AppNotice.show(
+        context,
+        message: 'Ошибка: $e',
+        type: AppNoticeType.error,
       );
     } finally {
       if (mounted) {
         setState(() => _busy = false);
       }
-    }
-  }
-
-  Future<void> handleWebSessionLimit() async {
-    final auth = FirebaseAuth.instance;
-    final now = DateTime.now().millisecondsSinceEpoch;
-
-    final savedAt = html.window.localStorage['vm_login_time'];
-
-    if (auth.currentUser == null) {
-      html.window.localStorage.remove('vm_login_time');
-      return;
-    }
-
-    if (savedAt == null) {
-      html.window.localStorage['vm_login_time'] = now.toString();
-      return;
-    }
-
-    final loginTime = int.tryParse(savedAt) ?? now;
-    final diffMs = now - loginTime;
-    final hours48 = const Duration(hours: 48).inMilliseconds;
-
-    if (diffMs > hours48) {
-      await auth.signOut();
-      html.window.localStorage.remove('vm_login_time');
     }
   }
 
@@ -1759,9 +2120,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
                   child: isWide
                       ? Row(
                           children: [
-                            const Expanded(
-                              child: _AuthSideInfo(),
-                            ),
+                            const Expanded(child: _AuthSideInfo()),
                             const SizedBox(width: 28),
                             Expanded(
                               child: _AuthCard(
@@ -1795,105 +2154,6 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
           ),
         ],
       ),
-    );
-  }
-}
-
-class AnimatedAuthBackground extends StatefulWidget {
-  const AnimatedAuthBackground({super.key});
-
-  @override
-  State<AnimatedAuthBackground> createState() => _AnimatedAuthBackgroundState();
-}
-
-class _AnimatedAuthBackgroundState extends State<AnimatedAuthBackground>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 9),
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  Widget _circle(double size, Color color) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-      ),
-    );
-  }
-
-  Widget _leaf(double size, double opacity) {
-    return Opacity(
-      opacity: opacity,
-      child: const Icon(
-        Icons.eco_outlined,
-        color: Color(0xFF7FAF44),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) {
-        final t = _controller.value;
-
-        return Stack(
-          children: [
-            Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Color(0xFFF6FAEE),
-                    Color(0xFFEDF6D9),
-                    Color(0xFFF8FBF3),
-                  ],
-                ),
-              ),
-            ),
-            Positioned(
-              left: 30 + 25 * t,
-              top: 70,
-              child: _circle(160, const Color(0x28A8E932)),
-            ),
-            Positioned(
-              right: 50,
-              top: 160 + 20 * t,
-              child: _circle(110, const Color(0x1F102B55)),
-            ),
-            Positioned(
-              left: 70,
-              bottom: 100 + 22 * t,
-              child: _circle(130, const Color(0x22B2DD6E)),
-            ),
-            Positioned(
-              right: 100 + 22 * t,
-              bottom: 50,
-              child: _circle(180, const Color(0x18A8E932)),
-            ),
-            Positioned(left: 120, top: 220 + 16 * t, child: _leaf(34, 0.35)),
-            Positioned(right: 180, top: 110, child: _leaf(42, 0.28)),
-            Positioned(left: 240, bottom: 150, child: _leaf(30, 0.22)),
-          ],
-        );
-      },
     );
   }
 }
@@ -2140,18 +2400,24 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       if (!mounted) return;
 
       if (achievementText != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(achievementText)),
+        AppNotice.show(
+          context,
+          message: achievementText,
+          type: AppNoticeType.success,
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Почта ещё не подтверждена')),
+        AppNotice.show(
+          context,
+          message: 'Почта ещё не подтверждена',
+          type: AppNoticeType.info,
         );
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка проверки: $e')),
+      AppNotice.show(
+        context,
+        message: 'Ошибка проверки: $e',
+        type: AppNoticeType.error,
       );
     } finally {
       if (mounted) {
@@ -2168,13 +2434,17 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       await user?.sendEmailVerification();
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Письмо отправлено ещё раз')),
+      AppNotice.show(
+        context,
+        message: 'Письмо отправлено ещё раз',
+        type: AppNoticeType.info,
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка отправки: $e')),
+      AppNotice.show(
+        context,
+        message: 'Ошибка отправки: $e',
+        type: AppNoticeType.error,
       );
     } finally {
       if (mounted) {
@@ -2499,53 +2769,41 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   Future<void> _initLocationAndCity() async {
-    try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        if (mounted) setState(() => _loadingLocation = false);
-        return;
-      }
+    final result = await AppLocationService().getCurrentLocationWithCity();
 
-      LocationPermission permission = await Geolocator.checkPermission();
+    if (!mounted) return;
 
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
+    if (!result.ok) {
+      setState(() {
+        _myPosition = null;
+        _myCity = null;
+        _loadingLocation = false;
+      });
 
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        if (mounted) setState(() => _loadingLocation = false);
-        return;
-      }
-
-      final pos = await Geolocator.getCurrentPosition();
-      final placemarks = await placemarkFromCoordinates(
-        pos.latitude,
-        pos.longitude,
+      AppNotice.show(
+        context,
+        message: result.error ?? 'Не удалось определить геолокацию',
+        type: AppNoticeType.error,
       );
-
-      String city = 'Неизвестно';
-      if (placemarks.isNotEmpty) {
-        final p = placemarks.first;
-        city = (p.locality?.trim().isNotEmpty == true)
-            ? p.locality!.trim()
-            : (p.administrativeArea?.trim().isNotEmpty == true)
-                ? p.administrativeArea!.trim()
-                : 'Неизвестно';
-      }
-
-      if (mounted) {
-        setState(() {
-          _myPosition = pos;
-          _myCity = city;
-          _loadingLocation = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _loadingLocation = false);
-      }
+      return;
     }
+
+    setState(() {
+      _myPosition = Position(
+        longitude: result.lng!,
+        latitude: result.lat!,
+        timestamp: DateTime.now(),
+        accuracy: 0,
+        altitude: 0,
+        altitudeAccuracy: 0,
+        heading: 0,
+        headingAccuracy: 0,
+        speed: 0,
+        speedAccuracy: 0,
+      );
+      _myCity = result.city ?? 'Неизвестно';
+      _loadingLocation = false;
+    });
   }
 
   double? _distanceKm(Map<String, dynamic> data) {
@@ -2572,7 +2830,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
     if (_loadingLocation) {
       return const SafeArea(
-        child: Center(child: CircularProgressIndicator()),
+        child: Center(child: LeafSpinner(size: 30)),
       );
     }
 
@@ -2588,9 +2846,7 @@ class _FeedScreenState extends State<FeedScreen> {
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 12),
-              const Text(
-                'Не удалось определить ваш город.',
-              ),
+              const Text('Не удалось определить ваш город.'),
               const SizedBox(height: 12),
               FilledButton(
                 onPressed: _initLocationAndCity,
@@ -2634,7 +2890,7 @@ class _FeedScreenState extends State<FeedScreen> {
                   }
 
                   if (snap.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
+                    return const Center(child: LeafSpinner(size: 28));
                   }
 
                   if (!snap.hasData) {
@@ -2824,8 +3080,11 @@ class _RequestDocCardState extends State<RequestDocCard> {
         ),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
+      if (!mounted) return;
+      AppNotice.show(
+        context,
+        message: 'Ошибка: $e',
+        type: AppNoticeType.error,
       );
     } finally {
       if (mounted) setState(() => _opening = false);
@@ -2938,11 +3197,7 @@ class _RequestDocCardState extends State<RequestDocCard> {
               child: FilledButton.icon(
                 onPressed: _opening ? null : _help,
                 icon: _opening
-                    ? const SizedBox(
-                        height: 18,
-                        width: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                    ? const LeafSpinner(size: 18, color: Colors.white)
                     : const Icon(Icons.favorite_border),
                 label: Text(_opening ? 'Открываю...' : 'Помочь'),
               ),
@@ -3076,57 +3331,43 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
   }
 
   Future<void> _initLocationAndCity() async {
-    try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        if (mounted) {
-          setState(() => _loadingLocation = false);
-        }
-        return;
-      }
+    setState(() => _loadingLocation = true);
 
-      LocationPermission permission = await Geolocator.checkPermission();
+    final result = await AppLocationService().getCurrentLocationWithCity();
 
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
+    if (!mounted) return;
 
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        if (mounted) {
-          setState(() => _loadingLocation = false);
-        }
-        return;
-      }
+    if (!result.ok) {
+      setState(() {
+        _loadingLocation = false;
+        _detectedCity = null;
+        _currentPosition = null;
+      });
 
-      final pos = await Geolocator.getCurrentPosition();
-      final placemarks = await placemarkFromCoordinates(
-        pos.latitude,
-        pos.longitude,
+      AppNotice.show(
+        context,
+        message: result.error ?? 'Не удалось определить геолокацию',
+        type: AppNoticeType.error,
       );
-
-      String city = 'Неизвестно';
-      if (placemarks.isNotEmpty) {
-        final p = placemarks.first;
-        city = (p.locality?.trim().isNotEmpty == true)
-            ? p.locality!.trim()
-            : (p.administrativeArea?.trim().isNotEmpty == true)
-                ? p.administrativeArea!.trim()
-                : 'Неизвестно';
-      }
-
-      if (mounted) {
-        setState(() {
-          _currentPosition = pos;
-          _detectedCity = city;
-          _loadingLocation = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() => _loadingLocation = false);
-      }
+      return;
     }
+
+    setState(() {
+      _detectedCity = result.city ?? 'Неизвестно';
+      _currentPosition = Position(
+        longitude: result.lng!,
+        latitude: result.lat!,
+        timestamp: DateTime.now(),
+        accuracy: 0,
+        altitude: 0,
+        altitudeAccuracy: 0,
+        heading: 0,
+        headingAccuracy: 0,
+        speed: 0,
+        speedAccuracy: 0,
+      );
+      _loadingLocation = false;
+    });
   }
 
   Future<void> _submit() async {
@@ -3137,17 +3378,19 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
     final d = _desc.text.trim();
 
     if (t.isEmpty || d.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Заполни название и описание')),
+      AppNotice.show(
+        context,
+        message: 'Заполни название и описание',
+        type: AppNoticeType.error,
       );
       return;
     }
 
     if (_currentPosition == null || _detectedCity == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Нужна геолокация, чтобы создать заявку'),
-        ),
+      AppNotice.show(
+        context,
+        message: 'Нужна геолокация, чтобы создать заявку',
+        type: AppNoticeType.error,
       );
       return;
     }
@@ -3179,7 +3422,8 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
         'createdRequestsCount': FieldValue.increment(1),
       }, SetOptions(merge: true));
 
-      final achievementText = await AchievementService().checkAfterRequestCreated();
+      final achievementText =
+          await AchievementService().checkAfterRequestCreated();
 
       _title.clear();
       _desc.clear();
@@ -3191,20 +3435,28 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
 
       if (!mounted) return;
 
-      final snackText = achievementText == null
-          ? 'Заявка опубликована ✅ Город: $_detectedCity'
-          : 'Заявка опубликована ✅ Город: $_detectedCity\n$achievementText';
+      final text = achievementText == null
+          ? 'Заявка опубликована. Город: $_detectedCity'
+          : 'Заявка опубликована. Город: $_detectedCity\n$achievementText';
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(snackText)),
+      AppNotice.show(
+        context,
+        message: text,
+        type: AppNoticeType.success,
       );
     } on FirebaseException catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Firestore: ${e.code} ${e.message ?? ""}')),
+      if (!mounted) return;
+      AppNotice.show(
+        context,
+        message: 'Firestore: ${e.code} ${e.message ?? ""}',
+        type: AppNoticeType.error,
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
+      if (!mounted) return;
+      AppNotice.show(
+        context,
+        message: 'Ошибка: $e',
+        type: AppNoticeType.error,
       );
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -3225,11 +3477,7 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
           if (_loadingLocation)
             const ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
+              leading: LeafSpinner(size: 22),
               title: Text('Определяю ваш город...'),
             )
           else
@@ -3315,11 +3563,7 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
           FilledButton(
             onPressed: _busy ? null : _submit,
             child: _busy
-                ? const SizedBox(
-                    height: 18,
-                    width: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+                ? const LeafSpinner(size: 18, color: Colors.white)
                 : const Text('Опубликовать'),
           ),
         ],
@@ -3482,13 +3726,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }, SetOptions(merge: true));
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Аватар обновлён')),
+      AppNotice.show(
+        context,
+        message: 'Аватар обновлён',
+        type: AppNoticeType.success,
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка загрузки аватара: $e')),
+      AppNotice.show(
+        context,
+        message: 'Ошибка загрузки аватара: $e',
+        type: AppNoticeType.error,
       );
     } finally {
       if (mounted) {
@@ -3517,13 +3765,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }, SetOptions(merge: true));
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Фон профиля обновлён')),
+      AppNotice.show(
+        context,
+        message: 'Фон профиля обновлён',
+        type: AppNoticeType.success,
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка загрузки фона: $e')),
+      AppNotice.show(
+        context,
+        message: 'Ошибка загрузки фона: $e',
+        type: AppNoticeType.error,
       );
     } finally {
       if (mounted) {
@@ -4946,13 +5198,18 @@ class _ChatScreenState extends State<ChatScreen> {
       final achievementText = await AchievementService().checkAfterFirstChatMessage();
 
       if (achievementText != null && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(achievementText)),
+        AppNotice.show(
+          context,
+          message: achievementText,
+          type: AppNoticeType.success,
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не отправилось: $e')),
+      if (!mounted) return;
+      AppNotice.show(
+        context,
+        message: 'Не отправилось: $e',
+        type: AppNoticeType.error,
       );
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -4979,7 +5236,7 @@ class _ChatScreenState extends State<ChatScreen> {
               stream: messagesQuery.snapshots(),
               builder: (context, snap) {
                 if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const Center(child: LeafSpinner(size: 28));
                 }
 
                 if (!snap.hasData || snap.data!.docs.isEmpty) {
@@ -5040,7 +5297,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   const SizedBox(width: 10),
                   FilledButton(
                     onPressed: _sending ? null : _send,
-                    child: const Icon(Icons.send),
+                    child: _sending
+                        ? const LeafSpinner(size: 18, color: Colors.white)
+                        : const Icon(Icons.send),
                   ),
                 ],
               ),
@@ -5137,16 +5396,20 @@ Future<void> closeRequestAndRateHelper({
     if (!context.mounted) return;
 
     final text = achievementMessages.isEmpty
-        ? 'Заявка завершена, оценка сохранена ✅'
-        : 'Заявка завершена, оценка сохранена ✅\n${achievementMessages.join('\n')}';
+        ? 'Заявка завершена, оценка сохранена'
+        : 'Заявка завершена, оценка сохранена\n${achievementMessages.join('\n')}';
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(text)),
+    AppNotice.show(
+      context,
+      message: text,
+      type: AppNoticeType.success,
     );
   } catch (e) {
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Ошибка завершения: $e')),
+    AppNotice.show(
+      context,
+      message: 'Ошибка завершения: $e',
+      type: AppNoticeType.error,
     );
   }
 }
