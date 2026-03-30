@@ -16,6 +16,69 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:palette_generator/palette_generator.dart';
 import 'dart:ui';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'dart:math' as math;
+import 'dart:typed_data';
+import 'package:image_picker/image_picker.dart';
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:http/http.dart' as http;
+import 'dart:html' as html;
+
+
+
+class CloudinaryImageService {
+  final ImagePicker _picker = ImagePicker();
+
+  static const String cloudName = 'dvdizve6c';
+  static const String uploadPreset = 'volunteer_app';
+
+  Future<String?> pickAndUploadImage({
+    required String folder,
+    int imageQuality = 85,
+  }) async {
+    final XFile? file = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: imageQuality,
+    );
+
+    if (file == null) return null;
+
+    final bytes = await file.readAsBytes();
+
+    final uri = Uri.parse(
+      'https://api.cloudinary.com/v1_1/$cloudName/image/upload',
+    );
+
+    final request = http.MultipartRequest('POST', uri)
+      ..fields['upload_preset'] = uploadPreset
+      ..fields['folder'] = folder
+      ..files.add(
+        http.MultipartFile.fromBytes(
+          'file',
+          bytes,
+          filename: file.name,
+        ),
+      );
+
+    final response = await request.send().timeout(const Duration(seconds: 40));
+    final body = await response.stream.bytesToString();
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('Cloudinary upload error: ${response.statusCode} $body');
+    }
+
+    final jsonMap = jsonDecode(body) as Map<String, dynamic>;
+    final secureUrl = (jsonMap['secure_url'] ?? '').toString();
+
+    if (secureUrl.isEmpty) {
+      throw Exception('Cloudinary не вернул secure_url');
+    }
+
+    return secureUrl;
+  }
+}
+
 
 class AchievementDefinition {
   final String id;
@@ -350,9 +413,230 @@ Future<bool> hasSeenOnboarding() async {
   final prefs = await SharedPreferences.getInstance();
   return prefs.getBool("onboarding_seen") ?? false;
 }
-/// =====================
-/// AUTH GATE
-/// =====================
+
+
+
+class FallingLeavesBackground extends StatefulWidget {
+  final bool dense;
+
+  const FallingLeavesBackground({
+    super.key,
+    this.dense = false,
+  });
+
+  @override
+  State<FallingLeavesBackground> createState() => _FallingLeavesBackgroundState();
+}
+
+class _FallingLeavesBackgroundState extends State<FallingLeavesBackground>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  final _random = math.Random(7);
+
+  late final List<_LeafSpec> _leaves;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 14),
+    )..repeat();
+
+    final count = widget.dense ? 22 : 14;
+    _leaves = List.generate(count, (_) {
+      return _LeafSpec(
+        startX: _random.nextDouble(),
+        size: 16 + _random.nextDouble() * 28,
+        durationFactor: 0.7 + _random.nextDouble() * 0.9,
+        delay: _random.nextDouble(),
+        drift: (_random.nextDouble() - 0.5) * 0.18,
+        rotationSpeed: (_random.nextDouble() - 0.5) * 2.2,
+        opacity: 0.18 + _random.nextDouble() * 0.32,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  double _progress(double t, double delay, double durationFactor) {
+    final shifted = (t * durationFactor + delay) % 1.0;
+    return shifted;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final t = _controller.value;
+
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final w = constraints.maxWidth;
+            final h = constraints.maxHeight;
+
+            return Stack(
+              children: [
+                Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xFFF7FAEF),
+                        Color(0xFFEDF6D9),
+                        Color(0xFFF9FBF4),
+                      ],
+                    ),
+                  ),
+                ),
+                for (final leaf in _leaves)
+                  () {
+                    final p = _progress(t, leaf.delay, leaf.durationFactor);
+                    final x = (leaf.startX + math.sin(p * math.pi * 2) * leaf.drift) * w;
+                    final y = (p * 1.25 - 0.15) * h;
+                    final angle = p * math.pi * 2 * leaf.rotationSpeed;
+
+                    return Positioned(
+                      left: x.clamp(-40.0, w + 40.0),
+                      top: y,
+                      child: Opacity(
+                        opacity: leaf.opacity,
+                        child: Transform.rotate(
+                          angle: angle,
+                          child: Icon(
+                            Icons.eco_outlined,
+                            size: leaf.size,
+                            color: const Color(0xFF7FAF44),
+                          ),
+                        ),
+                      ),
+                    );
+                  }(),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _LeafSpec {
+  final double startX;
+  final double size;
+  final double durationFactor;
+  final double delay;
+  final double drift;
+  final double rotationSpeed;
+  final double opacity;
+
+  _LeafSpec({
+    required this.startX,
+    required this.size,
+    required this.durationFactor,
+    required this.delay,
+    required this.drift,
+    required this.rotationSpeed,
+    required this.opacity,
+  });
+}
+
+class LeafSpinner extends StatefulWidget {
+  final double size;
+  final Color color;
+
+  const LeafSpinner({
+    super.key,
+    this.size = 26,
+    this.color = const Color(0xFF4C7B2F),
+  });
+
+  @override
+  State<LeafSpinner> createState() => _LeafSpinnerState();
+}
+
+class _LeafSpinnerState extends State<LeafSpinner>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1300),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Widget _leaf(double angle, double scale, double opacity) {
+    return Transform.rotate(
+      angle: angle,
+      child: Opacity(
+        opacity: opacity,
+        child: Transform.scale(
+          scale: scale,
+          child: Icon(
+            Icons.eco,
+            size: widget.size * 0.42,
+            color: widget.color,
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: widget.size,
+      height: widget.size,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          final t = _controller.value;
+
+          return Transform.rotate(
+            angle: t * math.pi * 2,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Transform.translate(
+                  offset: Offset(0, -widget.size * 0.34),
+                  child: _leaf(0.1, 1.00, 1.00),
+                ),
+                Transform.translate(
+                  offset: Offset(widget.size * 0.30, 0),
+                  child: _leaf(1.7, 0.88, 0.82),
+                ),
+                Transform.translate(
+                  offset: Offset(0, widget.size * 0.34),
+                  child: _leaf(3.2, 0.76, 0.64),
+                ),
+                Transform.translate(
+                  offset: Offset(-widget.size * 0.30, 0),
+                  child: _leaf(4.8, 0.64, 0.46),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
 
@@ -369,10 +653,8 @@ class AuthGate extends StatelessWidget {
 
         final user = snap.data;
 
-        print('AUTH user=${user?.email}, verified=${user?.emailVerified}');
-
         if (user == null) {
-          return const EmailAuthScreen();
+          return const IntroGate();
         }
 
         if (!user.emailVerified) {
@@ -381,6 +663,857 @@ class AuthGate extends StatelessWidget {
 
         return const MainShell();
       },
+    );
+  }
+}
+
+class IntroGate extends StatefulWidget {
+  const IntroGate({super.key});
+
+  @override
+  State<IntroGate> createState() => _IntroGateState();
+}
+
+class _IntroGateState extends State<IntroGate> {
+  bool _loading = true;
+  bool _showAuth = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadIntroState();
+  }
+
+  Future<void> _loadIntroState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final seen = prefs.getBool('intro_seen') ?? false;
+
+    if (!mounted) return;
+    setState(() {
+      _showAuth = seen;
+      _loading = false;
+    });
+  }
+
+  Future<void> _openAuth() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('intro_seen', true);
+
+    if (!mounted) return;
+    setState(() {
+      _showAuth = true;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_showAuth) {
+      return const EmailAuthScreen();
+    }
+
+    return IntroScreen(
+      onOpenApp: _openAuth,
+    );
+  }
+}
+
+class IntroScreen extends StatelessWidget {
+  final VoidCallback onOpenApp;
+
+  const IntroScreen({
+    super.key,
+    required this.onOpenApp,
+  });
+
+  Future<void> _openLanding() async {
+    final uri = Uri.parse('https://volunteermatch1.netlify.app/');
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _downloadApk() async {
+    final uri = Uri.parse('https://volunteermatch1.netlify.app/');
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isWide = MediaQuery.of(context).size.width > 900;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF4F8EA),
+      body: Stack(
+        children: [
+          const Positioned.fill(child: _IntroBackground()),
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1180),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _IntroTopBar(
+                        onOpenWebsite: _openLanding,
+                        onDownloadApk: _downloadApk,
+                        onLogin: onOpenApp,
+                        onRegister: () {
+                          onOpenApp();
+                        },
+                      ),
+                      const SizedBox(height: 28),
+                      isWide
+                          ? Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Expanded(
+                                  child: _IntroHero(
+                                    onOpenApp: onOpenApp,
+                                    onDownloadApk: _downloadApk,
+                                  ),
+                                ),
+                                const SizedBox(width: 28),
+                                const Expanded(
+                                  child: _PhonePreviewCard(),
+                                ),
+                              ],
+                            )
+                          : Column(
+                              children: [
+                                _IntroHero(
+                                  onOpenApp: onOpenApp,
+                                  onDownloadApk: _downloadApk,
+                                ),
+                                const SizedBox(height: 24),
+                                const _PhonePreviewCard(),
+                              ],
+                            ),
+                      const SizedBox(height: 28),
+                      const _SectionTitle('Почему это удобно'),
+                      const SizedBox(height: 16),
+                      Wrap(
+                        spacing: 16,
+                        runSpacing: 16,
+                        children: const [
+                          _FeatureCard(
+                            icon: Icons.place_outlined,
+                            title: 'Рядом',
+                            text: 'Помощь и волонтёры поблизости.',
+                          ),
+                          _FeatureCard(
+                            icon: Icons.shield_outlined,
+                            title: 'Безопасно',
+                            text: 'Профиль, рейтинг и прозрачная активность.',
+                          ),
+                          _FeatureCard(
+                            icon: Icons.flash_on_outlined,
+                            title: 'Быстро',
+                            text: 'Быстрые отклики и удобный чат.',
+                          ),
+                          _FeatureCard(
+                            icon: Icons.workspace_premium_outlined,
+                            title: 'Полезно',
+                            text: 'Достижения, активность и история помощи.',
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 28),
+                      const _SectionTitle('Как это работает'),
+                      const SizedBox(height: 16),
+                      const _StepTile(
+                        index: '1',
+                        title: 'Создай заявку',
+                        text: 'Опиши, какая помощь нужна и где ты находишься.',
+                      ),
+                      const _StepTile(
+                        index: '2',
+                        title: 'Получи отклик',
+                        text: 'Волонтёр рядом увидит заявку и откликнется.',
+                      ),
+                      const _StepTile(
+                        index: '3',
+                        title: 'Общайся в чате',
+                        text: 'Договоритесь о деталях прямо внутри приложения.',
+                      ),
+                      const _StepTile(
+                        index: '4',
+                        title: 'Заверши и оцени',
+                        text: 'После помощи можно поставить оценку и получить достижения.',
+                      ),
+                      const SizedBox(height: 32),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _IntroTopBar extends StatelessWidget {
+  final VoidCallback onOpenWebsite;
+  final VoidCallback onDownloadApk;
+  final VoidCallback onLogin;
+  final VoidCallback onRegister;
+
+  const _IntroTopBar({
+    required this.onOpenWebsite,
+    required this.onDownloadApk,
+    required this.onLogin,
+    required this.onRegister,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.88),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x12000000),
+            blurRadius: 22,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // ЛОГО
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: const Color(0xFFA8E932),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(Icons.eco, color: Color(0xFF12203A)),
+          ),
+
+          const SizedBox(width: 12),
+
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Volunteer Match',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF101B36),
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'Помощь рядом, когда она нужна',
+                  style: TextStyle(
+                    color: Color(0xFF667085),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // КНОПКИ СПРАВА
+
+          TextButton(
+            onPressed: onOpenWebsite,
+            child: const Text('Сайт'),
+          ),
+
+          const SizedBox(width: 8),
+
+          // ВОЙТИ
+          OutlinedButton(
+            onPressed: onLogin,
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              side: const BorderSide(color: Color(0xFFCBD5E1)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text('Войти'),
+          ),
+
+          const SizedBox(width: 8),
+
+          // РЕГИСТРАЦИЯ
+          FilledButton(
+            onPressed: onRegister,
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF0F1933),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text('Регистрация'),
+          ),
+
+          const SizedBox(width: 8),
+
+          // APK
+          FilledButton(
+            onPressed: onDownloadApk,
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFA8E932),
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text('APK'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _IntroHero extends StatelessWidget {
+  final VoidCallback onOpenApp;
+  final VoidCallback onDownloadApk;
+
+  const _IntroHero({
+    required this.onOpenApp,
+    required this.onDownloadApk,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.75),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: const Color(0xFFD6E7A8)),
+          ),
+          child: const Text(
+            '✨ Мобильное приложение для волонтёрской помощи',
+            style: TextStyle(
+              color: Color(0xFF4C5565),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        const SizedBox(height: 18),
+        const Text(
+          'Volunteer Match —\nпомощь людям\nрядом с вами',
+          style: TextStyle(
+            fontSize: 54,
+            height: 0.96,
+            fontWeight: FontWeight.w900,
+            color: Color(0xFF091633),
+          ),
+        ),
+        const SizedBox(height: 18),
+        const Text(
+          'Создавайте заявки, находите волонтёров поблизости, общайтесь в чате и делайте добрые дела быстрее и удобнее.',
+          style: TextStyle(
+            fontSize: 20,
+            height: 1.5,
+            color: Color(0xFF5F6B7A),
+          ),
+        ),
+        const SizedBox(height: 24),
+        Wrap(
+          spacing: 14,
+          runSpacing: 14,
+          children: [
+            FilledButton(
+              onPressed: onDownloadApk,
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFA8E932),
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 26,
+                  vertical: 18,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
+              child: const Text(
+                'Скачать Android APK',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+            OutlinedButton(
+              onPressed: onOpenApp,
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 26,
+                  vertical: 18,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
+              child: const Text(
+                'Открыть приложение',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _PhonePreviewCard extends StatelessWidget {
+  const _PhonePreviewCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F6DA),
+        borderRadius: BorderRadius.circular(36),
+        border: Border.all(color: const Color(0xFFE3EFBE), width: 10),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF7F7FA),
+          borderRadius: BorderRadius.circular(28),
+        ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(22),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Ближайшая заявка',
+                    style: TextStyle(color: Color(0xFF7C8798)),
+                  ),
+                  const SizedBox(height: 8),
+                  const Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Нужны продукты',
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF091633),
+                          ),
+                        ),
+                      ),
+                      _UrgentBadge(),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: const [
+                      _MiniInfo(text: '📍 1.2 км'),
+                      _MiniInfo(text: '⏳ 2 часа'),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF08132D),
+                borderRadius: BorderRadius.circular(22),
+              ),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Чат',
+                    style: TextStyle(
+                      color: Color(0xFFB7C4DD),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  SizedBox(height: 14),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: _ChatBubble(
+                      text: 'Здравствуйте, я рядом и могу помочь через 20 минут.',
+                      dark: true,
+                    ),
+                  ),
+                  SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: _ChatBubble(
+                      text: 'Спасибо! Напишу адрес в личные сообщения.',
+                      dark: false,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Row(
+              children: [
+                Expanded(
+                  child: _BottomMiniCard(
+                    icon: Icons.star_border,
+                    title: 'Рейтинг и отзывы',
+                  ),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: _BottomMiniCard(
+                    icon: Icons.workspace_premium_outlined,
+                    title: 'Достижения и активность',
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _IntroBackground extends StatefulWidget {
+  const _IntroBackground();
+
+  @override
+  State<_IntroBackground> createState() => _IntroBackgroundState();
+}
+
+class _IntroBackgroundState extends State<_IntroBackground>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 12),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Widget _leaf(double size, double opacity) {
+    return Opacity(
+      opacity: opacity,
+      child: Icon(
+        Icons.eco_outlined,
+        size: size,
+        color: const Color(0xFF86B84C),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final t = _controller.value;
+
+        return Stack(
+          children: [
+            Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFFF6F9EB),
+                    Color(0xFFF0F5DE),
+                    Color(0xFFF8FBF1),
+                  ],
+                ),
+              ),
+            ),
+            Positioned(left: 40 + 20 * t, top: 140, child: _leaf(42, 0.55)),
+            Positioned(right: 90, top: 90 + 24 * t, child: _leaf(36, 0.35)),
+            Positioned(left: 130, bottom: 140 + 16 * t, child: _leaf(34, 0.4)),
+            Positioned(right: 140 + 18 * t, bottom: 80, child: _leaf(48, 0.5)),
+            Positioned(left: 260, top: 300 + 14 * t, child: _leaf(28, 0.32)),
+            Positioned(right: 320, top: 220, child: _leaf(30, 0.28)),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _FeatureCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String text;
+
+  const _FeatureCard({
+    required this.icon,
+    required this.title,
+    required this.text,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 260,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.92),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x11000000),
+            blurRadius: 20,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: const Color(0xFF79B100), size: 30),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF091633),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            text,
+            style: const TextStyle(
+              color: Color(0xFF687486),
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StepTile extends StatelessWidget {
+  final String index;
+  final String title;
+  final String text;
+
+  const _StepTile({
+    required this.index,
+    required this.title,
+    required this.text,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.92),
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: const Color(0xFFA8E932),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Text(
+              index,
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                color: Colors.black,
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF091633),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  text,
+                  style: const TextStyle(
+                    color: Color(0xFF687486),
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  final String text;
+  const _SectionTitle(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 30,
+        fontWeight: FontWeight.w900,
+        color: Color(0xFF091633),
+      ),
+    );
+  }
+}
+
+class _MiniInfo extends StatelessWidget {
+  final String text;
+  const _MiniInfo({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F3F9),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(color: Color(0xFF5F6B7A)),
+      ),
+    );
+  }
+}
+
+class _UrgentBadge extends StatelessWidget {
+  const _UrgentBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFE0E0),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: const Text(
+        'СРОЧНО',
+        style: TextStyle(
+          color: Colors.red,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatBubble extends StatelessWidget {
+  final String text;
+  final bool dark;
+
+  const _ChatBubble({
+    required this.text,
+    required this.dark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 320),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: dark ? const Color(0xFF1E2A4A) : const Color(0xFFA8E932),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: dark ? Colors.white : Colors.black,
+          height: 1.45,
+        ),
+      ),
+    );
+  }
+}
+
+class _BottomMiniCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+
+  const _BottomMiniCard({
+    required this.icon,
+    required this.title,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 30, color: const Color(0xFF091633)),
+          const SizedBox(height: 10),
+          Text(
+            title,
+            style: const TextStyle(
+              color: Color(0xFF5F6B7A),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -473,6 +1606,10 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
         );
 
         await _ensureUserDoc(cred.user!);
+
+        html.window.localStorage['vm_login_time'] =
+            DateTime.now().millisecondsSinceEpoch.toString();
+
         await FirebaseAuth.instance.currentUser?.reload();
 
         final refreshedUser = FirebaseAuth.instance.currentUser;
@@ -493,9 +1630,10 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
 
         await _ensureUserDoc(cred.user!);
 
-        await cred.user?.sendEmailVerification();
-        print('VERIFY EMAIL SENT TO: ${cred.user?.email}');
+        html.window.localStorage['vm_login_time'] =
+            DateTime.now().millisecondsSinceEpoch.toString();
 
+        await cred.user?.sendEmailVerification();
         await FirebaseAuth.instance.currentUser?.reload();
 
         if (!mounted) return;
@@ -522,62 +1660,412 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
     }
   }
 
+  Future<void> handleWebSessionLimit() async {
+    final auth = FirebaseAuth.instance;
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    final savedAt = html.window.localStorage['vm_login_time'];
+
+    if (auth.currentUser == null) {
+      html.window.localStorage.remove('vm_login_time');
+      return;
+    }
+
+    if (savedAt == null) {
+      html.window.localStorage['vm_login_time'] = now.toString();
+      return;
+    }
+
+    final loginTime = int.tryParse(savedAt) ?? now;
+    final diffMs = now - loginTime;
+    final hours48 = const Duration(hours: 48).inMilliseconds;
+
+    if (diffMs > hours48) {
+      await auth.signOut();
+      html.window.localStorage.remove('vm_login_time');
+    }
+  }
+
+  void _backToIntro() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('intro_seen', false);
+
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const IntroGate()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isWide = MediaQuery.of(context).size.width > 760;
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_isLogin ? 'Вход' : 'Регистрация'),
+      body: Stack(
+        children: [
+          const FallingLeavesBackground(dense: true),
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1080),
+                  child: isWide
+                      ? Row(
+                          children: [
+                            const Expanded(
+                              child: _AuthSideInfo(),
+                            ),
+                            const SizedBox(width: 28),
+                            Expanded(
+                              child: _AuthCard(
+                                isLogin: _isLogin,
+                                busy: _busy,
+                                emailController: _email,
+                                passController: _pass,
+                                onSubmit: _submitEmail,
+                                onToggle: () {
+                                  setState(() => _isLogin = !_isLogin);
+                                },
+                                onBack: _backToIntro,
+                              ),
+                            ),
+                          ],
+                        )
+                      : _AuthCard(
+                          isLogin: _isLogin,
+                          busy: _busy,
+                          emailController: _email,
+                          passController: _pass,
+                          onSubmit: _submitEmail,
+                          onToggle: () {
+                            setState(() => _isLogin = !_isLogin);
+                          },
+                          onBack: _backToIntro,
+                        ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
+    );
+  }
+}
+
+class AnimatedAuthBackground extends StatefulWidget {
+  const AnimatedAuthBackground({super.key});
+
+  @override
+  State<AnimatedAuthBackground> createState() => _AnimatedAuthBackgroundState();
+}
+
+class _AnimatedAuthBackgroundState extends State<AnimatedAuthBackground>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 9),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Widget _circle(double size, Color color) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+      ),
+    );
+  }
+
+  Widget _leaf(double size, double opacity) {
+    return Opacity(
+      opacity: opacity,
+      child: const Icon(
+        Icons.eco_outlined,
+        color: Color(0xFF7FAF44),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final t = _controller.value;
+
+        return Stack(
           children: [
-            TextField(
-              controller: _email,
-              keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(
-                labelText: 'Email',
-                border: OutlineInputBorder(),
+            Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFFF6FAEE),
+                    Color(0xFFEDF6D9),
+                    Color(0xFFF8FBF3),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _pass,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Пароль (мин. 6)',
-                border: OutlineInputBorder(),
-              ),
+            Positioned(
+              left: 30 + 25 * t,
+              top: 70,
+              child: _circle(160, const Color(0x28A8E932)),
             ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _busy ? null : _submitEmail,
-                child: _busy
-                    ? const SizedBox(
-                        height: 18,
-                        width: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Text(_isLogin ? 'Войти' : 'Создать аккаунт'),
-              ),
+            Positioned(
+              right: 50,
+              top: 160 + 20 * t,
+              child: _circle(110, const Color(0x1F102B55)),
             ),
-            const SizedBox(height: 12),
-            TextButton(
-              onPressed: _busy
-                  ? null
-                  : () {
-                      setState(() => _isLogin = !_isLogin);
-                    },
-              child: Text(
-                _isLogin
-                    ? 'Нет аккаунта? Регистрация'
-                    : 'Уже есть аккаунт? Войти',
-              ),
+            Positioned(
+              left: 70,
+              bottom: 100 + 22 * t,
+              child: _circle(130, const Color(0x22B2DD6E)),
             ),
+            Positioned(
+              right: 100 + 22 * t,
+              bottom: 50,
+              child: _circle(180, const Color(0x18A8E932)),
+            ),
+            Positioned(left: 120, top: 220 + 16 * t, child: _leaf(34, 0.35)),
+            Positioned(right: 180, top: 110, child: _leaf(42, 0.28)),
+            Positioned(left: 240, bottom: 150, child: _leaf(30, 0.22)),
           ],
+        );
+      },
+    );
+  }
+}
+
+class _AuthSideInfo extends StatelessWidget {
+  const _AuthSideInfo();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          Text(
+            'Добро пожаловать\nв Volunteer Match',
+            style: TextStyle(
+              fontSize: 48,
+              height: 0.98,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF091633),
+            ),
+          ),
+          SizedBox(height: 18),
+          Text(
+            'Находи помощь рядом, общайся в чате, закрывай заявки и копи достижения за добрые дела.',
+            style: TextStyle(
+              fontSize: 18,
+              height: 1.5,
+              color: Color(0xFF5F6B7A),
+            ),
+          ),
+          SizedBox(height: 24),
+          _AuthInfoBullet(text: 'Заявки рядом по городу и расстоянию'),
+          SizedBox(height: 10),
+          _AuthInfoBullet(text: 'Чат между пользователями внутри заявки'),
+          SizedBox(height: 10),
+          _AuthInfoBullet(text: 'Рейтинг, история помощи и достижения'),
+        ],
+      ),
+    );
+  }
+}
+
+class _AuthInfoBullet extends StatelessWidget {
+  final String text;
+  const _AuthInfoBullet({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            color: const Color(0xFFA8E932),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(Icons.check, size: 18, color: Colors.black),
         ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 15,
+              color: Color(0xFF465266),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AuthCard extends StatelessWidget {
+  final bool isLogin;
+  final bool busy;
+  final TextEditingController emailController;
+  final TextEditingController passController;
+  final VoidCallback onSubmit;
+  final VoidCallback onToggle;
+  final VoidCallback onBack;
+
+  const _AuthCard({
+    required this.isLogin,
+    required this.busy,
+    required this.emailController,
+    required this.passController,
+    required this.onSubmit,
+    required this.onToggle,
+    required this.onBack,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 460),
+      padding: const EdgeInsets.all(26),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.90),
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x18000000),
+            blurRadius: 34,
+            offset: Offset(0, 14),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: onBack,
+              icon: const Icon(Icons.arrow_back_ios_new, size: 16),
+              label: const Text('Назад'),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Container(
+            width: 74,
+            height: 74,
+            decoration: BoxDecoration(
+              color: const Color(0xFFA8E932),
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: const Icon(Icons.eco, size: 36, color: Color(0xFF12203A)),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            isLogin ? 'С возвращением' : 'Создайте аккаунт',
+            style: const TextStyle(
+              fontSize: 30,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF091633),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            isLogin
+                ? 'Войдите, чтобы продолжить пользоваться Volunteer Match'
+                : 'Зарегистрируйтесь и начните помогать людям рядом',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Color(0xFF667085),
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 24),
+          TextField(
+            controller: emailController,
+            keyboardType: TextInputType.emailAddress,
+            decoration: InputDecoration(
+              hintText: 'Email',
+              prefixIcon: const Icon(Icons.mail_outline),
+              filled: true,
+              fillColor: const Color(0xFFF6F8FC),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(18),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: passController,
+            obscureText: true,
+            decoration: InputDecoration(
+              hintText: 'Пароль (мин. 6)',
+              prefixIcon: const Icon(Icons.lock_outline),
+              filled: true,
+              fillColor: const Color(0xFFF6F8FC),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(18),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: busy ? null : onSubmit,
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF466E2D),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 17),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
+              child: busy
+                  ? const LeafSpinner(
+                      size: 24,
+                      color: Colors.white,
+                    )
+                  : Text(
+                      isLogin ? 'Войти' : 'Создать аккаунт',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextButton(
+            onPressed: busy ? null : onToggle,
+            child: Text(
+              isLogin
+                  ? 'Нет аккаунта? Регистрация'
+                  : 'Уже есть аккаунт? Войти',
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -592,6 +2080,7 @@ class VerifyEmailScreen extends StatefulWidget {
 
 class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
   bool _busy = false;
+  bool _resending = false;
 
   Future<void> _checkVerified() async {
     setState(() => _busy = true);
@@ -608,6 +2097,10 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(achievementText)),
         );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Почта ещё не подтверждена')),
+        );
       }
     } catch (e) {
       if (!mounted) return;
@@ -622,85 +2115,245 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
   }
 
   Future<void> _resendEmail() async {
+    setState(() => _resending = true);
+
     try {
       final user = FirebaseAuth.instance.currentUser;
       await user?.sendEmailVerification();
-      print('RESEND VERIFY EMAIL TO: ${user?.email}');
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Письмо отправлено ещё раз')),
       );
     } catch (e) {
-      print('RESEND VERIFY EMAIL ERROR: $e');
-
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Ошибка отправки: $e')),
       );
+    } finally {
+      if (mounted) {
+        setState(() => _resending = false);
+      }
     }
   }
 
   Future<void> _logout() async {
+    html.window.localStorage.remove('vm_login_time');
     await FirebaseAuth.instance.signOut();
   }
 
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
+    final isWide = MediaQuery.of(context).size.width > 760;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Подтверждение почты')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            const SizedBox(height: 24),
-            const Icon(Icons.mark_email_read_outlined, size: 72),
-            const SizedBox(height: 16),
-            const Text(
-              'Подтверди почту',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Мы отправили письмо на: ${user?.email ?? "-"}',
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Открой письмо, нажми ссылку подтверждения, потом вернись сюда и нажми "Я подтвердил".',
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _busy ? null : _checkVerified,
-                child: _busy
-                    ? const SizedBox(
-                        height: 18,
-                        width: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Я подтвердил'),
+      body: Stack(
+        children: [
+          const FallingLeavesBackground(dense: true),
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 980),
+                  child: isWide
+                      ? Row(
+                          children: [
+                            const Expanded(child: _VerifyInfoSide()),
+                            const SizedBox(width: 28),
+                            Expanded(
+                              child: _VerifyCard(
+                                email: user?.email ?? '-',
+                                busy: _busy,
+                                resending: _resending,
+                                onCheck: _checkVerified,
+                                onResend: _resendEmail,
+                                onLogout: _logout,
+                              ),
+                            ),
+                          ],
+                        )
+                      : _VerifyCard(
+                          email: user?.email ?? '-',
+                          busy: _busy,
+                          resending: _resending,
+                          onCheck: _checkVerified,
+                          onResend: _resendEmail,
+                          onLogout: _logout,
+                        ),
+                ),
               ),
             ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed: _resendEmail,
-                child: const Text('Отправить письмо ещё раз'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VerifyInfoSide extends StatelessWidget {
+  const _VerifyInfoSide();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.only(right: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Остался\nпоследний шаг',
+            style: TextStyle(
+              fontSize: 46,
+              height: 0.98,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF091633),
+            ),
+          ),
+          SizedBox(height: 18),
+          Text(
+            'Подтверди email, чтобы открыть доступ ко всем функциям Volunteer Match.',
+            style: TextStyle(
+              fontSize: 18,
+              height: 1.5,
+              color: Color(0xFF5F6B7A),
+            ),
+          ),
+          SizedBox(height: 24),
+          _AuthInfoBullet(text: 'Безопасный вход и подтверждённый профиль'),
+          SizedBox(height: 10),
+          _AuthInfoBullet(text: 'Доступ к заявкам, чату и рейтингу'),
+          SizedBox(height: 10),
+          _AuthInfoBullet(text: 'Первое достижение за подтверждение почты'),
+        ],
+      ),
+    );
+  }
+}
+
+class _VerifyCard extends StatelessWidget {
+  final String email;
+  final bool busy;
+  final bool resending;
+  final VoidCallback onCheck;
+  final VoidCallback onResend;
+  final VoidCallback onLogout;
+
+  const _VerifyCard({
+    required this.email,
+    required this.busy,
+    required this.resending,
+    required this.onCheck,
+    required this.onResend,
+    required this.onLogout,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 460),
+      padding: const EdgeInsets.all(26),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.90),
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x18000000),
+            blurRadius: 34,
+            offset: Offset(0, 14),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 74,
+            height: 74,
+            decoration: BoxDecoration(
+              color: const Color(0xFFA8E932),
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: const Icon(
+              Icons.mark_email_read_outlined,
+              size: 36,
+              color: Color(0xFF12203A),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Подтверди почту',
+            style: TextStyle(
+              fontSize: 30,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF091633),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Мы отправили письмо на:\n$email',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Color(0xFF667085),
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Открой письмо, нажми ссылку подтверждения, потом вернись сюда и нажми кнопку ниже.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Color(0xFF667085),
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 22),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: busy ? null : onCheck,
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF466E2D),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 17),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
               ),
+              child: busy
+                  ? const LeafSpinner(
+                      size: 24,
+                      color: Colors.white,
+                    )
+                  : const Text(
+                      'Я подтвердил',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
             ),
-            const SizedBox(height: 10),
-            TextButton(
-              onPressed: _logout,
-              child: const Text('Выйти'),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: resending ? null : onResend,
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 17),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
+              child: resending
+                  ? const LeafSpinner(size: 24)
+                  : const Text('Отправить письмо ещё раз'),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 10),
+          TextButton(
+            onPressed: onLogout,
+            child: const Text('Выйти'),
+          ),
+        ],
       ),
     );
   }
@@ -1629,11 +3282,76 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
   }
 }
 
+
+class ProfileImageService {
+  final ImagePicker _picker = ImagePicker();
+
+  Future<String?> pickAndUploadImage({
+    required String uid,
+    required String folder,
+    int imageQuality = 85,
+  }) async {
+    final XFile? file = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: imageQuality,
+    );
+
+    if (file == null) return null;
+
+    final Uint8List bytes = await file.readAsBytes();
+    final ext = _fileExtension(file.name);
+    final fileName = '${DateTime.now().millisecondsSinceEpoch}.$ext';
+
+    final ref = FirebaseStorage.instance
+        .ref()
+        .child('users')
+        .child(uid)
+        .child(folder)
+        .child(fileName);
+
+    final metadata = SettableMetadata(
+      contentType: _contentTypeForExt(ext),
+    );
+
+    await ref.putData(bytes, metadata);
+    return await ref.getDownloadURL();
+  }
+
+  String _fileExtension(String name) {
+    final parts = name.split('.');
+    if (parts.length < 2) return 'jpg';
+    return parts.last.toLowerCase();
+  }
+
+  String _contentTypeForExt(String ext) {
+    switch (ext) {
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      case 'gif':
+        return 'image/gif';
+      default:
+        return 'image/jpeg';
+    }
+  }
+}
+
 /// =====================
 /// PROFILE SCREEN (EDIT + MY ACTIVE REQUESTS + CLOSE + RATE)
 /// =====================
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  final _imageService = CloudinaryImageService();
+
+  bool _avatarUploading = false;
+  bool _bgUploading = false;
 
   Future<void> _editProfile(
     BuildContext context,
@@ -1643,12 +3361,6 @@ class ProfileScreen extends StatelessWidget {
 
     final nameCtrl = TextEditingController(
       text: (current['name'] ?? '').toString(),
-    );
-    final avatarCtrl = TextEditingController(
-      text: (current['avatarUrl'] ?? '').toString(),
-    );
-    final bgCtrl = TextEditingController(
-      text: (current['profileBackground'] ?? '').toString(),
     );
     final bioCtrl = TextEditingController(
       text: (current['bio'] ?? '').toString(),
@@ -1666,22 +3378,6 @@ class ProfileScreen extends StatelessWidget {
                 controller: nameCtrl,
                 decoration: const InputDecoration(
                   labelText: 'Имя',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: avatarCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Аватар URL',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: bgCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Фон профиля URL',
                   border: OutlineInputBorder(),
                 ),
               ),
@@ -1715,11 +3411,79 @@ class ProfileScreen extends StatelessWidget {
 
     await FirebaseFirestore.instance.collection('users').doc(uid).set({
       'name': nameCtrl.text.trim().isEmpty ? 'Без имени' : nameCtrl.text.trim(),
-      'avatarUrl': avatarCtrl.text.trim(),
-      'profileBackground': bgCtrl.text.trim(),
       'bio': bioCtrl.text.trim(),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+  }
+
+  Future<void> _pickAvatar() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    setState(() => _avatarUploading = true);
+
+    try {
+      final url = await _imageService.pickAndUploadImage(
+        folder: 'volunteer_match/avatars',
+        imageQuality: 80,
+      );
+
+      if (url == null) return;
+
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'avatarUrl': url,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Аватар обновлён')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка загрузки аватара: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _avatarUploading = false);
+      }
+    }
+  }
+
+  Future<void> _pickProfileBackground() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    setState(() => _bgUploading = true);
+
+    try {
+      final url = await _imageService.pickAndUploadImage(
+        folder: 'volunteer_match/backgrounds',
+        imageQuality: 85,
+      );
+
+      if (url == null) return;
+
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'profileBackground': url,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Фон профиля обновлён')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка загрузки фона: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _bgUploading = false);
+      }
+    }
   }
 
   Future<Color> _getAdaptiveBioColor(String imageUrl) async {
@@ -1757,7 +3521,7 @@ class ProfileScreen extends StatelessWidget {
         stream: ref.snapshots(),
         builder: (context, snap) {
           if (!snap.hasData) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(child: LeafSpinner(size: 34));
           }
 
           final data = snap.data!.data() ?? {};
@@ -1839,19 +3603,75 @@ class ProfileScreen extends StatelessWidget {
                               ),
                             ),
                           ),
+                          Positioned(
+                            top: 12,
+                            right: 12,
+                            child: FilledButton.icon(
+                              onPressed:
+                                  _bgUploading ? null : _pickProfileBackground,
+                              icon: _bgUploading
+                                  ? const LeafSpinner(
+                                      size: 18,
+                                      color: Colors.white,
+                                    )
+                                  : const Icon(Icons.image, size: 18),
+                              label: Text(
+                                _bgUploading ? 'Загрузка...' : 'Фон',
+                              ),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: Colors.black.withOpacity(0.58),
+                                foregroundColor: Colors.white,
+                              ),
+                            ),
+                          ),
                           Padding(
                             padding: const EdgeInsets.all(16),
                             child: Column(
                               children: [
-                                CircleAvatar(
-                                  radius: 38,
-                                  backgroundColor: const Color(0xFFC8F0A4),
-                                  backgroundImage: avatarUrl.isNotEmpty
-                                      ? NetworkImage(avatarUrl)
-                                      : null,
-                                  child: avatarUrl.isEmpty
-                                      ? const Icon(Icons.person, size: 38)
-                                      : null,
+                                Stack(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 38,
+                                      backgroundColor: const Color(0xFFC8F0A4),
+                                      backgroundImage: avatarUrl.isNotEmpty
+                                          ? NetworkImage(avatarUrl)
+                                          : null,
+                                      child: avatarUrl.isEmpty
+                                          ? const Icon(Icons.person, size: 38)
+                                          : null,
+                                    ),
+                                    Positioned(
+                                      right: 0,
+                                      bottom: 0,
+                                      child: InkWell(
+                                        onTap: _avatarUploading
+                                            ? null
+                                            : _pickAvatar,
+                                        borderRadius:
+                                            BorderRadius.circular(999),
+                                        child: Container(
+                                          width: 30,
+                                          height: 30,
+                                          decoration: const BoxDecoration(
+                                            color: Color(0xFF466E2D),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: _avatarUploading
+                                              ? const Center(
+                                                  child: LeafSpinner(
+                                                    size: 14,
+                                                    color: Colors.white,
+                                                  ),
+                                                )
+                                              : const Icon(
+                                                  Icons.camera_alt,
+                                                  size: 16,
+                                                  color: Colors.white,
+                                                ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                                 const SizedBox(height: 12),
                                 Container(
@@ -2024,7 +3844,10 @@ class ProfileScreen extends StatelessWidget {
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
-                      onPressed: () => FirebaseAuth.instance.signOut(),
+                      onPressed: () async {
+                        html.window.localStorage.remove('vm_login_time');
+                        await FirebaseAuth.instance.signOut();
+                      },
                       icon: const Icon(Icons.logout),
                       label: const Text('Выйти'),
                     ),
