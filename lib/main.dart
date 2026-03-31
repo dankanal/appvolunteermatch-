@@ -24,7 +24,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'dart:html' as html;
-
+import 'package:intl/intl.dart';
 
 class CloudinaryImageService {
   final ImagePicker _picker = ImagePicker();
@@ -167,7 +167,7 @@ class _SplashScreenState extends State<SplashScreen> {
     Timer(const Duration(seconds: 2), () {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) => const MainShell(),
+          builder: (_) => const IntroGate(),
         ),
       );
     });
@@ -386,83 +386,129 @@ Future<void> main() async {
   runApp(const VolunteerMatchApp());
 }
 
-class VolunteerMatchApp extends StatelessWidget {
+class VolunteerMatchApp extends StatefulWidget {
   const VolunteerMatchApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Volunteer Match',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFF7FAF4),
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF7FBF3F),
-          brightness: Brightness.light,
+  State<VolunteerMatchApp> createState() => _VolunteerMatchAppState();
+}
+
+class _VolunteerMatchAppState extends State<VolunteerMatchApp> {
+  final AppSettingsController _settings = AppSettingsController();
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _init();
+  }
+
+  Future<void> _init() async {
+    await _settings.load();
+    if (!mounted) return;
+    setState(() => _loaded = true);
+  }
+
+  ThemeData _buildTheme(bool dark) {
+    final seed = const Color(0xFF7FBF3F);
+
+    final scheme = ColorScheme.fromSeed(
+      seedColor: seed,
+      brightness: dark ? Brightness.dark : Brightness.light,
+    );
+
+    return ThemeData(
+      useMaterial3: true,
+      scaffoldBackgroundColor:
+          dark ? const Color(0xFF0E1511) : const Color(0xFFF7FAF4),
+      colorScheme: scheme,
+      appBarTheme: AppBarTheme(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: false,
+        foregroundColor: dark ? Colors.white : const Color(0xFF091633),
+      ),
+      cardTheme: CardThemeData(
+        color: dark ? const Color(0xFF16201A) : Colors.white,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
         ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          centerTitle: false,
-          foregroundColor: Color(0xFF091633),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: dark ? const Color(0xFF18231D) : Colors.white,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 18,
+          vertical: 16,
         ),
-        cardTheme: CardThemeData(
-          color: Colors.white,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide.none,
         ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 18,
-            vertical: 16,
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide: BorderSide.none,
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide: BorderSide.none,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide: const BorderSide(
-              color: Color(0xFF7FBF3F),
-              width: 1.5,
-            ),
-          ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide.none,
         ),
-        filledButtonTheme: FilledButtonThemeData(
-          style: FilledButton.styleFrom(
-            backgroundColor: const Color(0xFF466E2D),
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(
-              horizontal: 18,
-              vertical: 16,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-            ),
-          ),
-        ),
-        outlinedButtonTheme: OutlinedButtonThemeData(
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 18,
-              vertical: 16,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-            ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(
+            color: scheme.primary,
+            width: 1.5,
           ),
         ),
       ),
-      home: const AuthGate(),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: const Color(0xFF466E2D),
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+        ),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: dark ? const Color(0xFF121A15) : Colors.white,
+        indicatorColor: const Color(0xFFA8E932).withOpacity(0.20),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_loaded) {
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: const Scaffold(
+          body: Stack(
+            children: [
+              FallingLeavesBackground(),
+              Center(child: LeafSpinner(size: 42)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return AnimatedBuilder(
+      animation: _settings,
+      builder: (context, _) {
+        return MaterialApp(
+          title: 'Volunteer Match',
+          debugShowCheckedModeBanner: false,
+          theme: _buildTheme(_settings.isDarkMode),
+          home: AuthGateWithSettings(settings: _settings),
+        );
+      },
     );
   }
 }
@@ -473,6 +519,503 @@ Future<bool> hasSeenOnboarding() async {
   return prefs.getBool("onboarding_seen") ?? false;
 }
 
+
+class AuthGateWithSettings extends StatefulWidget {
+  final AppSettingsController settings;
+
+  const AuthGateWithSettings({
+    super.key,
+    required this.settings,
+  });
+
+  @override
+  State<AuthGateWithSettings> createState() => _AuthGateWithSettingsState();
+}
+
+class _AuthGateWithSettingsState extends State<AuthGateWithSettings> {
+  bool _checkedSession = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _prepareSession();
+  }
+
+  Future<void> _prepareSession() async {
+    final auth = FirebaseAuth.instance;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final savedAt = html.window.localStorage['vm_login_time'];
+
+    if (auth.currentUser == null) {
+      html.window.localStorage.remove('vm_login_time');
+    } else if (savedAt == null) {
+      html.window.localStorage['vm_login_time'] = now.toString();
+    } else {
+      final loginTime = int.tryParse(savedAt) ?? now;
+      final diffMs = now - loginTime;
+      final hours48 = const Duration(hours: 48).inMilliseconds;
+
+      if (diffMs > hours48) {
+        await auth.signOut();
+        html.window.localStorage.remove('vm_login_time');
+      }
+    }
+
+    if (!mounted) return;
+    setState(() => _checkedSession = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_checkedSession) {
+      return const Scaffold(
+        body: Stack(
+          children: [
+            FallingLeavesBackground(),
+            Center(child: LeafSpinner(size: 42)),
+          ],
+        ),
+      );
+    }
+
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.userChanges(),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Stack(
+              children: [
+                FallingLeavesBackground(),
+                Center(child: LeafSpinner(size: 42)),
+              ],
+            ),
+          );
+        }
+
+        final user = snap.data;
+
+        if (user == null) {
+          return const IntroGate();
+        }
+
+        if (!user.emailVerified) {
+          return const VerifyEmailScreen();
+        }
+
+        return MainShell(settings: widget.settings);
+      },
+    );
+  }
+}
+
+class EventBigCard extends StatelessWidget {
+  final Map<String, dynamic> data;
+
+  const EventBigCard({
+    super.key,
+    required this.data,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final title = (data['title'] ?? '').toString();
+    final description = (data['description'] ?? '').toString();
+    final imageUrl = (data['imageUrl'] ?? '').toString();
+    final place = (data['place'] ?? '').toString();
+    final startAt = data['startAt'] as Timestamp?;
+    final dateText = startAt == null
+        ? 'Дата не указана'
+        : DateFormat('dd.MM.yyyy • HH:mm').format(startAt.toDate());
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        image: imageUrl.isNotEmpty
+            ? DecorationImage(
+                image: NetworkImage(imageUrl),
+                fit: BoxFit.cover,
+              )
+            : null,
+        gradient: imageUrl.isEmpty
+            ? const LinearGradient(
+                colors: [
+                  Color(0xFFA8E932),
+                  Color(0xFFEAF7C7),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              )
+            : null,
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x15000000),
+            blurRadius: 24,
+            offset: Offset(0, 10),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Colors.black.withOpacity(0.10),
+                Colors.black.withOpacity(0.42),
+              ],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.88),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  dateText,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF091633),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 80),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 28,
+                  height: 1.05,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 10),
+              if (place.isNotEmpty)
+                Text(
+                  '📍 $place',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              const SizedBox(height: 10),
+              Text(
+                description,
+                style: const TextStyle(
+                  color: Colors.white,
+                  height: 1.45,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+class EventsScreen extends StatelessWidget {
+  const EventsScreen({super.key});
+
+  Future<Map<String, dynamic>?> _loadRole() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return null;
+
+    final snap = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+
+    return snap.data();
+  }
+
+  Future<void> _openCreateEventDialog(BuildContext context) async {
+    final titleCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+    final imageCtrl = TextEditingController();
+    final placeCtrl = TextEditingController();
+
+    DateTime startAt = DateTime.now().add(const Duration(days: 1));
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setLocal) {
+          return AlertDialog(
+            title: const Text('Создать ивент'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: titleCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Название',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: placeCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Место',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: imageCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'URL картинки',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: descCtrl,
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      labelText: 'Описание',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.schedule),
+                    title: Text(
+                      DateFormat('dd.MM.yyyy HH:mm').format(startAt),
+                    ),
+                    trailing: TextButton(
+                      onPressed: () async {
+                        final date = await showDatePicker(
+                          context: context,
+                          firstDate: DateTime.now(),
+                          lastDate: DateTime.now().add(const Duration(days: 365)),
+                          initialDate: startAt,
+                        );
+
+                        if (date == null) return;
+
+                        final time = await showTimePicker(
+                          context: context,
+                          initialTime: TimeOfDay.fromDateTime(startAt),
+                        );
+
+                        if (time == null) return;
+
+                        setLocal(() {
+                          startAt = DateTime(
+                            date.year,
+                            date.month,
+                            date.day,
+                            time.hour,
+                            time.minute,
+                          );
+                        });
+                      },
+                      child: const Text('Выбрать'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Отмена'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Создать'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (ok != true) return;
+
+    if (titleCtrl.text.trim().isEmpty || descCtrl.text.trim().isEmpty) {
+      AppNotice.show(
+        context,
+        message: 'Заполни название и описание ивента',
+        type: AppNoticeType.error,
+      );
+      return;
+    }
+
+    final user = FirebaseAuth.instance.currentUser!;
+    final roleSnap = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+    final role = (roleSnap.data()?['role'] ?? 'user').toString();
+
+    if (role != 'admin' && role != 'moderator') {
+      AppNotice.show(
+        context,
+        message: 'Только модератор или админ может создавать ивенты',
+        type: AppNoticeType.error,
+      );
+      return;
+    }
+
+    await FirebaseFirestore.instance.collection('events').add({
+      'title': titleCtrl.text.trim(),
+      'description': descCtrl.text.trim(),
+      'imageUrl': imageCtrl.text.trim(),
+      'place': placeCtrl.text.trim(),
+      'startAt': Timestamp.fromDate(startAt),
+      'isActive': true,
+      'createdBy': user.uid,
+      'createdByRole': role,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    if (!context.mounted) return;
+    AppNotice.show(
+      context,
+      message: 'Ивент создан',
+      type: AppNoticeType.success,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final stream = FirebaseFirestore.instance
+        .collection('events')
+        .where('isActive', isEqualTo: true)
+        .orderBy('startAt', descending: false)
+        .snapshots();
+
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: _loadRole(),
+      builder: (context, roleSnap) {
+        final role = (roleSnap.data?['role'] ?? 'user').toString();
+        final canCreate = role == 'admin' || role == 'moderator';
+
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Ивенты',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    if (canCreate)
+                      FilledButton.icon(
+                        onPressed: () => _openCreateEventDialog(context),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Создать'),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Expanded(
+                  child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                    stream: stream,
+                    builder: (context, snap) {
+                      if (snap.connectionState == ConnectionState.waiting) {
+                        return const Center(child: LeafSpinner(size: 30));
+                      }
+
+                      if (snap.hasError) {
+                        return Center(
+                          child: Text('Ошибка загрузки ивентов: ${snap.error}'),
+                        );
+                      }
+
+                      if (!snap.hasData || snap.data!.docs.isEmpty) {
+                        return const Center(
+                          child: Text('Пока ивентов нет'),
+                        );
+                      }
+
+                      final docs = snap.data!.docs;
+
+                      return ListView.separated(
+                        itemCount: docs.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 16),
+                        itemBuilder: (context, i) {
+                          final data = docs[i].data();
+                          return EventBigCard(data: data);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+
+class SettingsScreen extends StatelessWidget {
+  final AppSettingsController settings;
+
+  const SettingsScreen({
+    super.key,
+    required this.settings,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final textColor = Theme.of(context).colorScheme.onSurface;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Настройки'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            child: Column(
+              children: [
+                SwitchListTile(
+                  value: settings.isDarkMode,
+                  onChanged: (v) => settings.setDarkMode(v),
+                  title: const Text('Тёмная тема'),
+                  subtitle: const Text('Переключить светлую и тёмную тему'),
+                  secondary: const Icon(Icons.dark_mode_outlined),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.info_outline),
+              title: const Text('О приложении'),
+              subtitle: Text(
+                'Volunteer Match — платформа для помощи рядом',
+                style: TextStyle(color: textColor.withOpacity(0.7)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 
 class FallingLeavesBackground extends StatefulWidget {
@@ -696,85 +1239,15 @@ class _LeafSpinnerState extends State<LeafSpinner>
   }
 }
 
-class AuthGate extends StatefulWidget {
+class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
 
   @override
-  State<AuthGate> createState() => _AuthGateState();
-}
-
-class _AuthGateState extends State<AuthGate> {
-  bool _checkedSession = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _prepareSession();
-  }
-
-  Future<void> _prepareSession() async {
-    final auth = FirebaseAuth.instance;
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final savedAt = html.window.localStorage['vm_login_time'];
-
-    if (auth.currentUser == null) {
-      html.window.localStorage.remove('vm_login_time');
-    } else if (savedAt == null) {
-      html.window.localStorage['vm_login_time'] = now.toString();
-    } else {
-      final loginTime = int.tryParse(savedAt) ?? now;
-      final diffMs = now - loginTime;
-      final hours48 = const Duration(hours: 48).inMilliseconds;
-
-      if (diffMs > hours48) {
-        await auth.signOut();
-        html.window.localStorage.remove('vm_login_time');
-      }
-    }
-
-    if (!mounted) return;
-    setState(() => _checkedSession = true);
-  }
-
-  @override
   Widget build(BuildContext context) {
-    if (!_checkedSession) {
-      return const Scaffold(
-        body: Stack(
-          children: [
-            FallingLeavesBackground(),
-            Center(child: LeafSpinner(size: 42)),
-          ],
-        ),
-      );
-    }
-
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.userChanges(),
-      builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Stack(
-              children: [
-                FallingLeavesBackground(),
-                Center(child: LeafSpinner(size: 42)),
-              ],
-            ),
-          );
-        }
-
-        final user = snap.data;
-
-        if (user == null) {
-          return const IntroGate();
-        }
-
-        if (!user.emailVerified) {
-          return const VerifyEmailScreen();
-        }
-
-        return const MainShell();
-      },
+    return const Scaffold(
+      body: Center(
+        child: Text('Используй AuthGateWithSettings вместо AuthGate'),
+      ),
     );
   }
 }
@@ -1987,6 +2460,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
         'volunteerHelpsCount': 0,
         'createdRequestsCount': 0,
         'achievements': buildInitialAchievements(),
+        'role': 'user',
         'createdAt': FieldValue.serverTimestamp(),
       });
     } else {
@@ -2004,6 +2478,9 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
       }
       if (!data.containsKey('achievements')) {
         patch['achievements'] = buildInitialAchievements();
+      }
+      if (!data.containsKey('role')) {
+        patch['role'] = 'user';
       }
 
       if (patch.isNotEmpty) {
@@ -2157,6 +2634,29 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
     );
   }
 }
+
+
+class AppSettingsController extends ChangeNotifier {
+  static const _darkModeKey = 'app_dark_mode';
+
+  bool _isDarkMode = false;
+  bool get isDarkMode => _isDarkMode;
+
+  Future<void> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    _isDarkMode = prefs.getBool(_darkModeKey) ?? false;
+    notifyListeners();
+  }
+
+  Future<void> setDarkMode(bool value) async {
+    _isDarkMode = value;
+    notifyListeners();
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_darkModeKey, value);
+  }
+}
+
 
 class _AuthSideInfo extends StatelessWidget {
   const _AuthSideInfo();
@@ -2678,8 +3178,15 @@ class _VerifyCard extends StatelessWidget {
 /// =====================
 /// MAIN SHELL
 /// =====================
+
+
 class MainShell extends StatefulWidget {
-  const MainShell({super.key});
+  final AppSettingsController settings;
+
+  const MainShell({
+    super.key,
+    required this.settings,
+  });
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -2688,10 +3195,18 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _index = 0;
 
-  final _pages = const [
-    FeedScreen(),
-    CreateRequestScreen(),
-    ProfileScreen(),
+  late final List<Widget> _pages = [
+    const FeedScreen(),
+    const EventsScreen(),
+    const CreateRequestScreen(),
+    const ProfileScreen(),
+  ];
+
+  final List<String> _titles = const [
+    'Лента',
+    'Ивенты',
+    'Заявка',
+    'Профиль',
   ];
 
   @override
@@ -2711,17 +3226,46 @@ class _MainShellState extends State<MainShell> {
         }
 
         return Scaffold(
-          body: _pages[_index],
+          appBar: AppBar(
+            title: Text(_titles[_index]),
+            actions: [
+              IconButton(
+                tooltip: 'Настройки',
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => SettingsScreen(settings: widget.settings),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.settings_outlined),
+              ),
+            ],
+          ),
+          body: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            child: KeyedSubtree(
+              key: ValueKey(_index),
+              child: _pages[_index],
+            ),
+          ),
           bottomNavigationBar: NavigationBar(
             selectedIndex: _index,
             onDestinationSelected: (i) => setState(() => _index = i),
             destinations: [
               const NavigationDestination(
-                icon: Icon(Icons.view_agenda),
+                icon: Icon(Icons.view_agenda_outlined),
+                selectedIcon: Icon(Icons.view_agenda),
                 label: 'Лента',
               ),
               const NavigationDestination(
+                icon: Icon(Icons.event_outlined),
+                selectedIcon: Icon(Icons.event),
+                label: 'Ивенты',
+              ),
+              const NavigationDestination(
                 icon: Icon(Icons.add_circle_outline),
+                selectedIcon: Icon(Icons.add_circle),
                 label: 'Заявка',
               ),
               NavigationDestination(
@@ -2729,6 +3273,18 @@ class _MainShellState extends State<MainShell> {
                   clipBehavior: Clip.none,
                   children: [
                     const Icon(Icons.person_outline),
+                    if (totalUnread > 0)
+                      Positioned(
+                        right: -6,
+                        top: -4,
+                        child: _UnreadBadge(count: totalUnread),
+                      ),
+                  ],
+                ),
+                selectedIcon: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    const Icon(Icons.person),
                     if (totalUnread > 0)
                       Positioned(
                         right: -6,
