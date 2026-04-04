@@ -499,11 +499,11 @@ class EventDetailsDialog extends StatelessWidget {
     required this.data,
   });
 
-
   Future<Map<String, dynamic>> _loadViewerInfo() async {
     final me = FirebaseAuth.instance.currentUser;
     if (me == null) return {};
-    final snap = await FirebaseFirestore.instance.collection('users').doc(me.uid).get();
+    final snap =
+        await FirebaseFirestore.instance.collection('users').doc(me.uid).get();
     return snap.data() ?? {};
   }
 
@@ -550,9 +550,15 @@ class EventDetailsDialog extends StatelessWidget {
   }
 
   Future<void> _openEditDialog(BuildContext context) async {
-    final titleCtrl = TextEditingController(text: (data['title'] ?? '').toString());
-    final descCtrl = TextEditingController(text: (data['description'] ?? '').toString());
-    final placeCtrl = TextEditingController(text: (data['place'] ?? '').toString());
+    final titleCtrl =
+        TextEditingController(text: (data['title'] ?? '').toString());
+    final descCtrl =
+        TextEditingController(text: (data['description'] ?? '').toString());
+    final placeCtrl =
+        TextEditingController(text: (data['place'] ?? '').toString());
+    final capacityCtrl = TextEditingController(
+      text: ((data['capacity'] ?? 0)).toString(),
+    );
 
     final imageService = CloudinaryImageService();
 
@@ -560,11 +566,22 @@ class EventDetailsDialog extends StatelessWidget {
     bool imageUploading = false;
 
     DateTime startAt =
-        (data['startAt'] as Timestamp?)?.toDate() ?? DateTime.now().add(const Duration(days: 1));
+        (data['startAt'] as Timestamp?)?.toDate() ??
+            DateTime.now().add(const Duration(days: 1));
 
     bool askFullName = data['askFullName'] == true;
     bool askSchool = data['askSchool'] == true;
     bool askUniversity = data['askUniversity'] == true;
+
+    String selectedEventFormat =
+        (data['eventFormat'] ?? 'offline').toString();
+    String selectedRecruitmentStatus =
+        (data['recruitmentStatus'] ?? 'open').toString();
+    String selectedCity = normalizeCity((data['city'] ?? '').toString());
+
+    if (!kAvailableCities.contains(selectedCity)) {
+      selectedCity = kAvailableCities.first;
+    }
 
     final ok = await showDialog<bool>(
       context: context,
@@ -608,6 +625,75 @@ class EventDetailsDialog extends StatelessWidget {
                   TextField(
                     controller: placeCtrl,
                     decoration: const InputDecoration(labelText: 'Место'),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: selectedCity,
+                    decoration: const InputDecoration(labelText: 'Город'),
+                    items: kAvailableCities.map((city) {
+                      return DropdownMenuItem(
+                        value: city,
+                        child: Text(city),
+                      );
+                    }).toList(),
+                    onChanged: (v) {
+                      if (v != null) {
+                        setLocal(() => selectedCity = v);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: selectedEventFormat,
+                    decoration: const InputDecoration(labelText: 'Формат ивента'),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'offline',
+                        child: Text('Офлайн'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'online',
+                        child: Text('Онлайн'),
+                      ),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) {
+                        setLocal(() => selectedEventFormat = v);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: selectedRecruitmentStatus,
+                    decoration: const InputDecoration(labelText: 'Статус набора'),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'open',
+                        child: Text('Набор открыт'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'in_progress',
+                        child: Text('В процессе'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'closed',
+                        child: Text('Набор закрыт'),
+                      ),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) {
+                        setLocal(() => selectedRecruitmentStatus = v);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: capacityCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Лимит мест',
+                      hintText: 'Например 20',
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -658,7 +744,8 @@ class EventDetailsDialog extends StatelessWidget {
                   ),
                   CheckboxListTile(
                     value: askUniversity,
-                    onChanged: (v) => setLocal(() => askUniversity = v ?? false),
+                    onChanged: (v) =>
+                        setLocal(() => askUniversity = v ?? false),
                     title: const Text('Спрашивать университет'),
                     contentPadding: EdgeInsets.zero,
                   ),
@@ -671,8 +758,10 @@ class EventDetailsDialog extends StatelessWidget {
                       onPressed: () async {
                         final date = await showDatePicker(
                           context: context,
-                          firstDate: DateTime.now().subtract(const Duration(days: 1)),
-                          lastDate: DateTime.now().add(const Duration(days: 365)),
+                          firstDate:
+                              DateTime.now().subtract(const Duration(days: 1)),
+                          lastDate:
+                              DateTime.now().add(const Duration(days: 365)),
                           initialDate: startAt,
                         );
                         if (date == null) return;
@@ -731,6 +820,10 @@ class EventDetailsDialog extends StatelessWidget {
         'title': titleCtrl.text.trim(),
         'description': descCtrl.text.trim(),
         'place': placeCtrl.text.trim(),
+        'city': selectedCity,
+        'eventFormat': selectedEventFormat,
+        'recruitmentStatus': selectedRecruitmentStatus,
+        'capacity': int.tryParse(capacityCtrl.text.trim()) ?? 0,
         'imageUrl': imageUrl,
         'startAt': Timestamp.fromDate(startAt),
         'askFullName': askFullName,
@@ -768,7 +861,8 @@ class EventDetailsDialog extends StatelessWidget {
     final recruitmentStatus = (data['recruitmentStatus'] ?? 'open').toString();
     final createdBy = (data['createdBy'] ?? '').toString();
     final chatId = (data['chatId'] ?? '').toString();
-    final capacity = (data['capacity'] is num) ? (data['capacity'] as num).toInt() : 0;
+    final capacity =
+        (data['capacity'] is num) ? (data['capacity'] as num).toInt() : 0;
     final startAt = data['startAt'] as Timestamp?;
     final me = FirebaseAuth.instance.currentUser;
     final isOwner = me != null && me.uid == createdBy;
@@ -792,12 +886,13 @@ class EventDetailsDialog extends StatelessWidget {
           builder: (context, regSnap) {
             final regs = regSnap.data?.docs ?? [];
             final participantsCount = regs.length;
-            final alreadyJoined = me != null && regs.any((e) => e.id == me.uid);
-            final canSeeParticipants = me != null && (me.uid == createdBy || isAdmin);
+            final alreadyJoined =
+                me != null && regs.any((doc) => doc.id == me.uid);
+            final canSeeParticipants =
+                me != null && (me.uid == createdBy || isAdmin);
             final isFull = capacity > 0 && participantsCount >= capacity;
-            final canJoin = !alreadyJoined &&
-                !isFull &&
-                recruitmentStatus != 'closed';
+            final canJoin =
+                !alreadyJoined && !isFull && recruitmentStatus != 'closed';
 
             return Dialog(
               insetPadding: const EdgeInsets.all(16),
@@ -839,9 +934,7 @@ class EventDetailsDialog extends StatelessWidget {
                                 color: Color(0xFF466E2D),
                               ),
                             ),
-
                             const SizedBox(height: 12),
-
                             Wrap(
                               spacing: 8,
                               runSpacing: 8,
@@ -854,8 +947,12 @@ class EventDetailsDialog extends StatelessWidget {
                                 ),
                                 _EventInfoChip(
                                   icon: Icons.flag_outlined,
-                                  text: getEventRecruitmentLabel(recruitmentStatus),
-                                  color: getEventRecruitmentColor(recruitmentStatus),
+                                  text: getEventRecruitmentLabel(
+                                    recruitmentStatus,
+                                  ),
+                                  color: getEventRecruitmentColor(
+                                    recruitmentStatus,
+                                  ),
                                 ),
                                 if (city.isNotEmpty)
                                   _EventInfoChip(
@@ -864,15 +961,17 @@ class EventDetailsDialog extends StatelessWidget {
                                   ),
                               ],
                             ),
-
                             const SizedBox(height: 12),
-
                             Row(
                               children: [
                                 Icon(
-                                  isFull ? Icons.block : Icons.groups_2_outlined,
+                                  isFull
+                                      ? Icons.block
+                                      : Icons.groups_2_outlined,
                                   size: 18,
-                                  color: isFull ? Colors.red : const Color(0xFF466E2D),
+                                  color: isFull
+                                      ? Colors.red
+                                      : const Color(0xFF466E2D),
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
@@ -881,7 +980,8 @@ class EventDetailsDialog extends StatelessWidget {
                                       : '$participantsCount участников',
                                   style: TextStyle(
                                     fontWeight: FontWeight.w800,
-                                    color: isFull ? Colors.red : Colors.black87,
+                                    color:
+                                        isFull ? Colors.red : Colors.black87,
                                   ),
                                 ),
                                 if (isFull) ...[
@@ -896,12 +996,10 @@ class EventDetailsDialog extends StatelessWidget {
                                 ],
                               ],
                             ),
-
                             if (place.isNotEmpty) ...[
                               const SizedBox(height: 10),
                               Text('📍 $place'),
                             ],
-
                             if (canSeeParticipants) ...[
                               const SizedBox(height: 16),
                               const Text(
@@ -925,9 +1023,10 @@ class EventDetailsDialog extends StatelessWidget {
                                   child: ListView.separated(
                                     scrollDirection: Axis.horizontal,
                                     itemCount: regs.length,
-                                    separatorBuilder: (_, __) => const SizedBox(width: 8),
-                                    itemBuilder: (context, i) {
-                                      final userId = regs[i].id;
+                                    separatorBuilder: (_, __) =>
+                                        const SizedBox(width: 8),
+                                    itemBuilder: (context, index) {
+                                      final userId = regs[index].id;
                                       return UserMiniProfileButton(
                                         userId: userId,
                                         compact: true,
@@ -936,14 +1035,12 @@ class EventDetailsDialog extends StatelessWidget {
                                   ),
                                 ),
                             ],
-
                             const SizedBox(height: 16),
                             Text(
                               description,
                               style: const TextStyle(height: 1.5),
                             ),
                             const SizedBox(height: 20),
-
                             if (isOwner) ...[
                               Row(
                                 children: [
@@ -969,7 +1066,6 @@ class EventDetailsDialog extends StatelessWidget {
                               ),
                               const SizedBox(height: 10),
                             ],
-
                             Row(
                               children: [
                                 Expanded(
@@ -979,7 +1075,8 @@ class EventDetailsDialog extends StatelessWidget {
                                             Navigator.of(context).pop();
                                             showDialog(
                                               context: context,
-                                              builder: (_) => EventRegistrationDialog(
+                                              builder: (_) =>
+                                                  EventRegistrationDialog(
                                                 eventId: eventId,
                                                 eventData: data,
                                               ),
@@ -1012,7 +1109,9 @@ class EventDetailsDialog extends StatelessWidget {
                                         ),
                                       );
                                     },
-                                    icon: const Icon(Icons.chat_bubble_outline),
+                                    icon: const Icon(
+                                      Icons.chat_bubble_outline,
+                                    ),
                                     label: const Text('Чат'),
                                   ),
                                 ],
@@ -7722,8 +7821,6 @@ class _EventsScreenState extends State<EventsScreen> {
                     },
                   ),
                   const SizedBox(height: 12),
-                  ),
-                  const SizedBox(height: 12),
                   if (imageUrl.isNotEmpty)
                     ClipRRect(
                       borderRadius: BorderRadius.circular(16),
@@ -9130,40 +9227,47 @@ const List<String> kEventRecruitmentStatuses = [
   'closed',
 ];
 
-String getEventFormatLabel(String value) {
-  switch (value) {
-    case 'online':
-      return 'Онлайн';
-    case 'offline':
-      return 'Офлайн';
-    default:
-      return 'Не указано';
-  }
-}
+class _EventInfoChip extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final Color? color;
 
-String getEventRecruitmentLabel(String value) {
-  switch (value) {
-    case 'open':
-      return 'Набор открыт';
-    case 'in_progress':
-      return 'В процессе';
-    case 'closed':
-      return 'Набор закрыт';
-    default:
-      return 'Не указано';
-  }
-}
+  const _EventInfoChip({
+    required this.icon,
+    required this.text,
+    this.color,
+  });
 
-Color getEventRecruitmentColor(String value) {
-  switch (value) {
-    case 'open':
-      return const Color(0xFF2E7D32);
-    case 'in_progress':
-      return const Color(0xFFF57C00);
-    case 'closed':
-      return Colors.red;
-    default:
-      return const Color(0xFF6B7280);
+  @override
+  Widget build(BuildContext context) {
+    final effectiveColor = color ?? const Color(0xFF24324A);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: effectiveColor.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: effectiveColor.withOpacity(0.18),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: effectiveColor),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              text,
+              style: TextStyle(
+                color: effectiveColor,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
