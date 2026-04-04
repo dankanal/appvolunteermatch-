@@ -36,6 +36,35 @@ class SettingsScreen extends StatelessWidget {
     'Кокшетау',
   ];
 
+  Future<void> _logout(BuildContext context) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Выйти из аккаунта?'),
+        content: const Text('Ты действительно хочешь выйти?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Выйти'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true) return;
+
+    html.window.localStorage.remove('vm_login_time');
+    await FirebaseAuth.instance.signOut();
+
+    if (context.mounted) {
+      Navigator.pop(context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bg = isDarkMode ? const Color(0xFF0B1220) : const Color(0xFFF8FAFC);
@@ -156,12 +185,11 @@ class SettingsScreen extends StatelessWidget {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  onTap: () async {
-                    await FirebaseAuth.instance.signOut();
-                    if (context.mounted) {
-                      Navigator.pop(context);
-                    }
-                  },
+                  subtitle: Text(
+                    'Завершить текущую сессию',
+                    style: TextStyle(color: sub),
+                  ),
+                  onTap: () => _logout(context),
                 ),
               ],
             ),

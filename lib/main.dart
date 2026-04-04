@@ -26,6 +26,1006 @@ import 'package:http/http.dart' as http;
 import 'dart:html' as html;
 import 'package:intl/intl.dart';
 
+
+
+
+const List<String> kAvailableCities = [
+  'Алматы',
+  'Астана',
+  'Шымкент',
+  'Караганда',
+  'Актобе',
+  'Тараз',
+  'Павлодар',
+  'Семей',
+  'Усть-Каменогорск',
+  'Костанай',
+  'Кызылорда',
+  'Атырау',
+  'Актау',
+  'Петропавловск',
+  'Туркестан',
+];
+
+String normalizeCity(String? city) {
+  final value = (city ?? '').trim();
+  if (value.isEmpty) return kAvailableCities.first;
+  if (kAvailableCities.contains(value)) return value;
+  return kAvailableCities.first;
+}
+class EventRegistrationDialog extends StatefulWidget {
+  final String eventId;
+  final Map<String, dynamic> eventData;
+
+  const EventRegistrationDialog({
+    super.key,
+    required this.eventId,
+    required this.eventData,
+  });
+
+  @override
+  State<EventRegistrationDialog> createState() => _EventRegistrationDialogState();
+}
+
+
+
+class _EventRegistrationDialogState extends State<EventRegistrationDialog> {
+  final _fullNameCtrl = TextEditingController();
+  final _schoolCtrl = TextEditingController();
+  final _universityCtrl = TextEditingController();
+
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _fullNameCtrl.dispose();
+    _schoolCtrl.dispose();
+    _universityCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final askFullName = widget.eventData['askFullName'] == true;
+    final askSchool = widget.eventData['askSchool'] == true;
+    final askUniversity = widget.eventData['askUniversity'] == true;
+
+    if (askFullName && _fullNameCtrl.text.trim().isEmpty) {
+      AppNotice.show(
+        context,
+        message: 'Заполни имя и фамилию',
+        type: AppNoticeType.error,
+      );
+      return;
+    }
+
+    if (askSchool && _schoolCtrl.text.trim().isEmpty) {
+      AppNotice.show(
+        context,
+        message: 'Заполни школу',
+        type: AppNoticeType.error,
+      );
+      return;
+    }
+
+    if (askUniversity && _universityCtrl.text.trim().isEmpty) {
+      AppNotice.show(
+        context,
+        message: 'Заполни университет',
+        type: AppNoticeType.error,
+      );
+      return;
+    }
+
+    setState(() => _busy = true);
+
+    try {
+      final regRef = FirebaseFirestore.instance
+          .collection('events')
+          .doc(widget.eventId)
+          .collection('registrations')
+          .doc(user.uid);
+
+      await regRef.set({
+        'userId': user.uid,
+        'email': user.email ?? '',
+        'fullName': _fullNameCtrl.text.trim(),
+        'school': _schoolCtrl.text.trim(),
+        'university': _universityCtrl.text.trim(),
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      if (!mounted) return;
+      Navigator.of(context).pop();
+
+      AppNotice.show(
+        context,
+        message: 'Ты зарегистрирован на ивент',
+        type: AppNoticeType.success,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      AppNotice.show(
+        context,
+        message: 'Ошибка регистрации: $e',
+        type: AppNoticeType.error,
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final askFullName = widget.eventData['askFullName'] == true;
+    final askSchool = widget.eventData['askSchool'] == true;
+    final askUniversity = widget.eventData['askUniversity'] == true;
+
+    return AlertDialog(
+      title: const Text('Регистрация на ивент'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (askFullName) ...[
+              TextField(
+                controller: _fullNameCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Имя и фамилия',
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (askSchool) ...[
+              TextField(
+                controller: _schoolCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Школа',
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (askUniversity) ...[
+              TextField(
+                controller: _universityCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Университет',
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _busy ? null : () => Navigator.of(context).pop(),
+          child: const Text('Выйти'),
+        ),
+        FilledButton(
+          onPressed: _busy ? null : _submit,
+          child: _busy
+              ? const LeafSpinner(size: 18, color: Colors.white)
+              : const Text('Отправить'),
+        ),
+      ],
+    );
+  }
+}
+
+
+class EventDetailsDialog extends StatelessWidget {
+  final String eventId;
+  final Map<String, dynamic> data;
+
+  const EventDetailsDialog({
+    super.key,
+    required this.eventId,
+    required this.data,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final title = (data['title'] ?? '').toString();
+    final description = (data['description'] ?? '').toString();
+    final imageUrl = (data['imageUrl'] ?? '').toString();
+    final place = (data['place'] ?? '').toString();
+    final startAt = data['startAt'] as Timestamp?;
+    final dateText = startAt == null
+        ? 'Дата не указана'
+        : DateFormat('dd.MM.yyyy • HH:mm').format(startAt.toDate());
+
+    return Dialog(
+      insetPadding: const EdgeInsets.all(16),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 700),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (imageUrl.isNotEmpty)
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                child: Image.network(
+                  imageUrl,
+                  height: 240,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      dateText,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF466E2D),
+                      ),
+                    ),
+                    if (place.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text('📍 $place'),
+                    ],
+                    const SizedBox(height: 16),
+                    Text(
+                      description,
+                      style: const TextStyle(height: 1.5),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                              showDialog(
+                                context: context,
+                                builder: (_) => EventRegistrationDialog(
+                                  eventId: eventId,
+                                  eventData: data,
+                                ),
+                              );
+                            },
+                            child: const Text('Участвовать'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('Закрыть'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class EventBigCard extends StatelessWidget {
+  final String eventId;
+  final Map<String, dynamic> data;
+
+  const EventBigCard({
+    super.key,
+    required this.eventId,
+    required this.data,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final title = (data['title'] ?? '').toString();
+    final description = (data['description'] ?? '').toString();
+    final imageUrl = (data['imageUrl'] ?? '').toString();
+    final place = (data['place'] ?? '').toString();
+    final startAt = data['startAt'] as Timestamp?;
+    final dateText = startAt == null
+        ? 'Дата не указана'
+        : DateFormat('dd.MM.yyyy • HH:mm').format(startAt.toDate());
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(28),
+      onTap: () {
+        showDialog(
+          context: context,
+          builder: (_) => EventDetailsDialog(
+            eventId: eventId,
+            data: data,
+          ),
+        );
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(28),
+          image: imageUrl.isNotEmpty
+              ? DecorationImage(
+                  image: NetworkImage(imageUrl),
+                  fit: BoxFit.cover,
+                )
+              : null,
+          gradient: imageUrl.isEmpty
+              ? const LinearGradient(
+                  colors: [
+                    Color(0xFFA8E932),
+                    Color(0xFFEAF7C7),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : null,
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x15000000),
+              blurRadius: 24,
+              offset: Offset(0, 10),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.black.withOpacity(0.08),
+                  Colors.black.withOpacity(0.48),
+                ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.90),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    dateText,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF091633),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 90),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 28,
+                    height: 1.05,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                if (place.isNotEmpty)
+                  Text(
+                    '📍 $place',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                const SizedBox(height: 10),
+                Text(
+                  description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+class EventsScreen extends StatelessWidget {
+  const EventsScreen({super.key});
+
+  Future<Map<String, dynamic>?> _loadRole() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return null;
+
+    final snap = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+
+    return snap.data();
+  }
+
+  Future<void> _openCreateEventDialog(BuildContext context) async {
+    final titleCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+    final imageCtrl = TextEditingController();
+    final placeCtrl = TextEditingController();
+
+    DateTime startAt = DateTime.now().add(const Duration(days: 1));
+
+    bool askFullName = true;
+    bool askSchool = false;
+    bool askUniversity = false;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setLocal) {
+          return AlertDialog(
+            title: const Text('Создать ивент'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: titleCtrl,
+                    decoration: const InputDecoration(labelText: 'Название'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: placeCtrl,
+                    decoration: const InputDecoration(labelText: 'Место'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: imageCtrl,
+                    decoration: const InputDecoration(labelText: 'URL картинки'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: descCtrl,
+                    maxLines: 4,
+                    decoration: const InputDecoration(labelText: 'Описание'),
+                  ),
+                  const SizedBox(height: 12),
+                  CheckboxListTile(
+                    value: askFullName,
+                    onChanged: (v) => setLocal(() => askFullName = v ?? false),
+                    title: const Text('Спрашивать имя и фамилию'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  CheckboxListTile(
+                    value: askSchool,
+                    onChanged: (v) => setLocal(() => askSchool = v ?? false),
+                    title: const Text('Спрашивать школу'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  CheckboxListTile(
+                    value: askUniversity,
+                    onChanged: (v) => setLocal(() => askUniversity = v ?? false),
+                    title: const Text('Спрашивать университет'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  const SizedBox(height: 12),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.schedule),
+                    title: Text(DateFormat('dd.MM.yyyy HH:mm').format(startAt)),
+                    trailing: TextButton(
+                      onPressed: () async {
+                        final date = await showDatePicker(
+                          context: context,
+                          firstDate: DateTime.now(),
+                          lastDate: DateTime.now().add(const Duration(days: 365)),
+                          initialDate: startAt,
+                        );
+                        if (date == null) return;
+
+                        final time = await showTimePicker(
+                          context: context,
+                          initialTime: TimeOfDay.fromDateTime(startAt),
+                        );
+                        if (time == null) return;
+
+                        setLocal(() {
+                          startAt = DateTime(
+                            date.year,
+                            date.month,
+                            date.day,
+                            time.hour,
+                            time.minute,
+                          );
+                        });
+                      },
+                      child: const Text('Выбрать'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Отмена'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Создать'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (ok != true) return;
+
+    if (titleCtrl.text.trim().isEmpty || descCtrl.text.trim().isEmpty) {
+      AppNotice.show(
+        context,
+        message: 'Заполни название и описание ивента',
+        type: AppNoticeType.error,
+      );
+      return;
+    }
+
+    final user = FirebaseAuth.instance.currentUser!;
+    final roleSnap = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+    final role = (roleSnap.data()?['role'] ?? 'user').toString();
+
+    if (role != 'admin' && role != 'moderator') {
+      AppNotice.show(
+        context,
+        message: 'Только модератор или админ может создавать ивенты',
+        type: AppNoticeType.error,
+      );
+      return;
+    }
+
+    await FirebaseFirestore.instance.collection('events').add({
+      'title': titleCtrl.text.trim(),
+      'description': descCtrl.text.trim(),
+      'imageUrl': imageCtrl.text.trim(),
+      'place': placeCtrl.text.trim(),
+      'startAt': Timestamp.fromDate(startAt),
+      'isActive': true,
+      'askFullName': askFullName,
+      'askSchool': askSchool,
+      'askUniversity': askUniversity,
+      'createdBy': user.uid,
+      'createdByRole': role,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    if (!context.mounted) return;
+    AppNotice.show(
+      context,
+      message: 'Ивент создан',
+      type: AppNoticeType.success,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final stream = FirebaseFirestore.instance
+        .collection('events')
+        .where('isActive', isEqualTo: true)
+        .orderBy('startAt', descending: false)
+        .snapshots();
+
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: _loadRole(),
+      builder: (context, roleSnap) {
+        final role = (roleSnap.data?['role'] ?? 'user').toString();
+        final canCreate = role == 'admin' || role == 'moderator';
+
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Ивенты',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    if (canCreate)
+                      FilledButton.icon(
+                        onPressed: () => _openCreateEventDialog(context),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Создать'),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Expanded(
+                  child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                    stream: stream,
+                    builder: (context, snap) {
+                      if (snap.connectionState == ConnectionState.waiting) {
+                        return const Center(child: LeafSpinner(size: 30));
+                      }
+
+                      if (snap.hasError) {
+                        return Center(
+                          child: Text('Ошибка загрузки ивентов: ${snap.error}'),
+                        );
+                      }
+
+                      if (!snap.hasData || snap.data!.docs.isEmpty) {
+                        return const Center(
+                          child: Text('Пока ивентов нет'),
+                        );
+                      }
+
+                      final docs = snap.data!.docs;
+
+                      return ListView.separated(
+                        itemCount: docs.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 16),
+                        itemBuilder: (context, i) {
+                          final doc = docs[i];
+                          final data = doc.data();
+                          return EventBigCard(
+                            eventId: doc.id,
+                            data: data,
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class PublicProfileScreen extends StatelessWidget {
+  final String userId;
+
+  const PublicProfileScreen({
+    super.key,
+    required this.userId,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final ref = FirebaseFirestore.instance.collection('users').doc(userId);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Профиль пользователя'),
+      ),
+      body: SafeArea(
+        child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream: ref.snapshots(),
+          builder: (context, snap) {
+            if (!snap.hasData) {
+              return const Center(child: LeafSpinner(size: 34));
+            }
+
+            if (!snap.data!.exists) {
+              return const Center(
+                child: Text('Пользователь не найден'),
+              );
+            }
+
+            final data = snap.data!.data() ?? {};
+
+            final name = (data['name'] ?? 'Без имени').toString();
+            final email = (data['email'] ?? '').toString();
+            final avatarUrl = (data['avatarUrl'] ?? '').toString();
+            final bio = (data['bio'] ?? '').toString();
+            final backgroundUrl = (data['profileBackground'] ?? '').toString();
+
+            final rating = (data['rating'] is num)
+                ? (data['rating'] as num).toDouble()
+                : 5.0;
+
+            final ratingCount = (data['ratingCount'] is num)
+                ? (data['ratingCount'] as num).toInt()
+                : 0;
+
+            final createdRequestsCount = (data['createdRequestsCount'] is num)
+                ? (data['createdRequestsCount'] as num).toInt()
+                : 0;
+
+            final volunteerHelpsCount = (data['volunteerHelpsCount'] is num)
+                ? (data['volunteerHelpsCount'] as num).toInt()
+                : 0;
+
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    color: const Color(0xFFF4F7EF),
+                    image: backgroundUrl.isNotEmpty
+                        ? DecorationImage(
+                            image: NetworkImage(backgroundUrl),
+                            fit: BoxFit.cover,
+                          )
+                        : null,
+                    border: Border.all(
+                      color: Colors.black.withOpacity(0.06),
+                    ),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(24),
+                    child: Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        gradient: backgroundUrl.isNotEmpty
+                            ? LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.black.withOpacity(0.28),
+                                  Colors.black.withOpacity(0.10),
+                                ],
+                              )
+                            : null,
+                        color: backgroundUrl.isEmpty
+                            ? Colors.white
+                            : Colors.transparent,
+                      ),
+                      child: Column(
+                        children: [
+                          CircleAvatar(
+                            radius: 42,
+                            backgroundColor: const Color(0xFFC8F0A4),
+                            backgroundImage: avatarUrl.isNotEmpty
+                                ? NetworkImage(avatarUrl)
+                                : null,
+                            child: avatarUrl.isEmpty
+                                ? const Icon(Icons.person, size: 42)
+                                : null,
+                          ),
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: backgroundUrl.isNotEmpty
+                                  ? Colors.white.withOpacity(0.78)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              name,
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.black,
+                              ),
+                            ),
+                          ),
+                          if (email.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: backgroundUrl.isNotEmpty
+                                    ? Colors.white.withOpacity(0.68)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                email,
+                                style: const TextStyle(color: Colors.black87),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 14),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            alignment: WrapAlignment.center,
+                            children: [
+                              _PublicProfileStatChip(
+                                icon: Icons.star_outline,
+                                text: '${rating.toStringAsFixed(1)} ⭐',
+                              ),
+                              _PublicProfileStatChip(
+                                icon: Icons.reviews_outlined,
+                                text: '$ratingCount оценок',
+                              ),
+                              _PublicProfileStatChip(
+                                icon: Icons.edit_note,
+                                text: '$createdRequestsCount заявок',
+                              ),
+                              _PublicProfileStatChip(
+                                icon: Icons.volunteer_activism_outlined,
+                                text: '$volunteerHelpsCount помощи',
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                if (bio.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(
+                        bio,
+                        style: const TextStyle(height: 1.45),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+
+class UserMiniProfileButton extends StatelessWidget {
+  final String userId;
+  final bool compact;
+
+  const UserMiniProfileButton({
+    super.key,
+    required this.userId,
+    this.compact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final ref = FirebaseFirestore.instance.collection('users').doc(userId);
+
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: ref.snapshots(),
+      builder: (context, snap) {
+        final data = snap.data?.data() ?? {};
+        final name = (data['name'] ?? 'Без имени').toString();
+        final avatarUrl = (data['avatarUrl'] ?? '').toString();
+
+        return InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => PublicProfileScreen(userId: userId),
+              ),
+            );
+          },
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 8 : 10,
+              vertical: compact ? 6 : 8,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircleAvatar(
+                  radius: compact ? 13 : 16,
+                  backgroundColor: const Color(0xFFC8F0A4),
+                  backgroundImage:
+                      avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
+                  child: avatarUrl.isEmpty
+                      ? Icon(
+                          Icons.person,
+                          size: compact ? 14 : 16,
+                          color: Colors.black87,
+                        )
+                      : null,
+                ),
+                const SizedBox(width: 8),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: compact ? 110 : 170,
+                  ),
+                  child: Text(
+                    name,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: compact ? 12 : 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+
+class _PublicProfileStatChip extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _PublicProfileStatChip({
+    required this.icon,
+    required this.text,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.82),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: Colors.black.withOpacity(0.06),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: Colors.black87),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: const TextStyle(
+              fontSize: 13,
+              color: Colors.black87,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
 class CloudinaryImageService {
   final ImagePicker _picker = ImagePicker();
 
@@ -608,407 +1608,171 @@ class _AuthGateWithSettingsState extends State<AuthGateWithSettings> {
   }
 }
 
-class EventBigCard extends StatelessWidget {
-  final Map<String, dynamic> data;
 
-  const EventBigCard({
+class SettingsScreen extends StatelessWidget {
+  final bool isDarkMode;
+  final ValueChanged<bool> onThemeChanged;
+  final String selectedCity;
+  final ValueChanged<String> onCityChanged;
+
+  const SettingsScreen({
     super.key,
-    required this.data,
+    required this.isDarkMode,
+    required this.onThemeChanged,
+    required this.selectedCity,
+    required this.onCityChanged,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    final title = (data['title'] ?? '').toString();
-    final description = (data['description'] ?? '').toString();
-    final imageUrl = (data['imageUrl'] ?? '').toString();
-    final place = (data['place'] ?? '').toString();
-    final startAt = data['startAt'] as Timestamp?;
-    final dateText = startAt == null
-        ? 'Дата не указана'
-        : DateFormat('dd.MM.yyyy • HH:mm').format(startAt.toDate());
+  static const List<String> cities = [
+    'Шымкент',
+    'Алматы',
+    'Астана',
+    'Караганда',
+    'Тараз',
+    'Туркестан',
+    'Кызылорда',
+    'Актобе',
+    'Атырау',
+    'Павлодар',
+    'Семей',
+    'Усть-Каменогорск',
+    'Костанай',
+    'Петропавловск',
+    'Уральск',
+    'Актау',
+    'Талдыкорган',
+    'Кокшетау',
+  ];
 
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        image: imageUrl.isNotEmpty
-            ? DecorationImage(
-                image: NetworkImage(imageUrl),
-                fit: BoxFit.cover,
-              )
-            : null,
-        gradient: imageUrl.isEmpty
-            ? const LinearGradient(
-                colors: [
-                  Color(0xFFA8E932),
-                  Color(0xFFEAF7C7),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              )
-            : null,
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x15000000),
-            blurRadius: 24,
-            offset: Offset(0, 10),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                Colors.black.withOpacity(0.10),
-                Colors.black.withOpacity(0.42),
-              ],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.88),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  dateText,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF091633),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 80),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 28,
-                  height: 1.05,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 10),
-              if (place.isNotEmpty)
-                Text(
-                  '📍 $place',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              const SizedBox(height: 10),
-              Text(
-                description,
-                style: const TextStyle(
-                  color: Colors.white,
-                  height: 1.45,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-
-class EventsScreen extends StatelessWidget {
-  const EventsScreen({super.key});
-
-  Future<Map<String, dynamic>?> _loadRole() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return null;
-
-    final snap = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .get();
-
-    return snap.data();
-  }
-
-  Future<void> _openCreateEventDialog(BuildContext context) async {
-    final titleCtrl = TextEditingController();
-    final descCtrl = TextEditingController();
-    final imageCtrl = TextEditingController();
-    final placeCtrl = TextEditingController();
-
-    DateTime startAt = DateTime.now().add(const Duration(days: 1));
-
+  Future<void> _logout(BuildContext context) async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (_) => StatefulBuilder(
-        builder: (context, setLocal) {
-          return AlertDialog(
-            title: const Text('Создать ивент'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: titleCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Название',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: placeCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Место',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: imageCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'URL картинки',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: descCtrl,
-                    maxLines: 4,
-                    decoration: const InputDecoration(
-                      labelText: 'Описание',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.schedule),
-                    title: Text(
-                      DateFormat('dd.MM.yyyy HH:mm').format(startAt),
-                    ),
-                    trailing: TextButton(
-                      onPressed: () async {
-                        final date = await showDatePicker(
-                          context: context,
-                          firstDate: DateTime.now(),
-                          lastDate: DateTime.now().add(const Duration(days: 365)),
-                          initialDate: startAt,
-                        );
-
-                        if (date == null) return;
-
-                        final time = await showTimePicker(
-                          context: context,
-                          initialTime: TimeOfDay.fromDateTime(startAt),
-                        );
-
-                        if (time == null) return;
-
-                        setLocal(() {
-                          startAt = DateTime(
-                            date.year,
-                            date.month,
-                            date.day,
-                            time.hour,
-                            time.minute,
-                          );
-                        });
-                      },
-                      child: const Text('Выбрать'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Отмена'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Создать'),
-              ),
-            ],
-          );
-        },
+      builder: (_) => AlertDialog(
+        title: const Text('Выйти из аккаунта?'),
+        content: const Text('Ты действительно хочешь выйти?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Выйти'),
+          ),
+        ],
       ),
     );
 
     if (ok != true) return;
 
-    if (titleCtrl.text.trim().isEmpty || descCtrl.text.trim().isEmpty) {
-      AppNotice.show(
-        context,
-        message: 'Заполни название и описание ивента',
-        type: AppNoticeType.error,
-      );
-      return;
+    html.window.localStorage.remove('vm_login_time');
+    await FirebaseAuth.instance.signOut();
+
+    if (context.mounted) {
+      Navigator.pop(context);
     }
-
-    final user = FirebaseAuth.instance.currentUser!;
-    final roleSnap = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .get();
-    final role = (roleSnap.data()?['role'] ?? 'user').toString();
-
-    if (role != 'admin' && role != 'moderator') {
-      AppNotice.show(
-        context,
-        message: 'Только модератор или админ может создавать ивенты',
-        type: AppNoticeType.error,
-      );
-      return;
-    }
-
-    await FirebaseFirestore.instance.collection('events').add({
-      'title': titleCtrl.text.trim(),
-      'description': descCtrl.text.trim(),
-      'imageUrl': imageCtrl.text.trim(),
-      'place': placeCtrl.text.trim(),
-      'startAt': Timestamp.fromDate(startAt),
-      'isActive': true,
-      'createdBy': user.uid,
-      'createdByRole': role,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-
-    if (!context.mounted) return;
-    AppNotice.show(
-      context,
-      message: 'Ивент создан',
-      type: AppNoticeType.success,
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final stream = FirebaseFirestore.instance
-        .collection('events')
-        .where('isActive', isEqualTo: true)
-        .orderBy('startAt', descending: false)
-        .snapshots();
+    final bg = isDarkMode ? const Color(0xFF0B1220) : const Color(0xFFF8FAFC);
+    final card = isDarkMode ? const Color(0xFF111827) : Colors.white;
+    final text = isDarkMode ? Colors.white : const Color(0xFF111827);
+    final sub = isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF6B7280);
 
-    return FutureBuilder<Map<String, dynamic>?>(
-      future: _loadRole(),
-      builder: (context, roleSnap) {
-        final role = (roleSnap.data?['role'] ?? 'user').toString();
-        final canCreate = role == 'admin' || role == 'moderator';
+    return Scaffold(
+      backgroundColor: bg,
+      appBar: AppBar(
+        title: const Text('Настройки'),
+        backgroundColor: bg,
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
 
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
+          /// тема + город
+          Container(
+            decoration: BoxDecoration(
+              color: card,
+              borderRadius: BorderRadius.circular(24),
+            ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        'Ивенты',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
+
+                SwitchListTile(
+                  value: isDarkMode,
+                  onChanged: onThemeChanged,
+                  title: Text(
+                    'Тёмная тема',
+                    style: TextStyle(
+                      color: text,
+                      fontWeight: FontWeight.w600,
                     ),
-                    if (canCreate)
-                      FilledButton.icon(
-                        onPressed: () => _openCreateEventDialog(context),
-                        icon: const Icon(Icons.add),
-                        label: const Text('Создать'),
-                      ),
-                  ],
+                  ),
                 ),
-                const SizedBox(height: 14),
-                Expanded(
-                  child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                    stream: stream,
-                    builder: (context, snap) {
-                      if (snap.connectionState == ConnectionState.waiting) {
-                        return const Center(child: LeafSpinner(size: 30));
-                      }
 
-                      if (snap.hasError) {
-                        return Center(
-                          child: Text('Ошибка загрузки ивентов: ${snap.error}'),
-                        );
-                      }
+                const Divider(height: 1),
 
-                      if (!snap.hasData || snap.data!.docs.isEmpty) {
-                        return const Center(
-                          child: Text('Пока ивентов нет'),
-                        );
-                      }
+                ListTile(
+                  title: Text(
+                    'Город',
+                    style: TextStyle(
+                      color: text,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
 
-                      final docs = snap.data!.docs;
+                  subtitle: Text(
+                    selectedCity,
+                    style: TextStyle(color: sub),
+                  ),
 
-                      return ListView.separated(
-                        itemCount: docs.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 16),
-                        itemBuilder: (context, i) {
-                          final data = docs[i].data();
-                          return EventBigCard(data: data);
-                        },
+                  trailing: DropdownButton<String>(
+                    value: selectedCity,
+                    underline: const SizedBox(),
+
+                    items: cities.map((city) {
+                      return DropdownMenuItem(
+                        value: city,
+                        child: Text(city),
                       );
+                    }).toList(),
+
+                    onChanged: (v) {
+                      if (v != null) {
+                        onCityChanged(v);
+                      }
                     },
                   ),
                 ),
               ],
             ),
           ),
-        );
-      },
-    );
-  }
-}
 
+          const SizedBox(height: 16),
 
-class SettingsScreen extends StatelessWidget {
-  final AppSettingsController settings;
-
-  const SettingsScreen({
-    super.key,
-    required this.settings,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final textColor = Theme.of(context).colorScheme.onSurface;
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Настройки'),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Card(
-            child: Column(
-              children: [
-                SwitchListTile(
-                  value: settings.isDarkMode,
-                  onChanged: (v) => settings.setDarkMode(v),
-                  title: const Text('Тёмная тема'),
-                  subtitle: const Text('Переключить светлую и тёмную тему'),
-                  secondary: const Icon(Icons.dark_mode_outlined),
-                ),
-              ],
+          /// выход
+          Container(
+            decoration: BoxDecoration(
+              color: card,
+              borderRadius: BorderRadius.circular(24),
             ),
-          ),
-          const SizedBox(height: 12),
-          Card(
             child: ListTile(
-              leading: const Icon(Icons.info_outline),
-              title: const Text('О приложении'),
-              subtitle: Text(
-                'Volunteer Match — платформа для помощи рядом',
-                style: TextStyle(color: textColor.withOpacity(0.7)),
+
+              leading: const Icon(
+                Icons.logout,
+                color: Colors.red,
               ),
+
+              title: const Text(
+                'Выйти из аккаунта',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+
+              onTap: () => _logout(context),
             ),
           ),
         ],
@@ -1016,6 +1780,9 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 }
+
+
+
 
 
 class FallingLeavesBackground extends StatefulWidget {
@@ -2461,6 +3228,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
         'createdRequestsCount': 0,
         'achievements': buildInitialAchievements(),
         'role': 'user',
+        'city': kAvailableCities.first,
         'createdAt': FieldValue.serverTimestamp(),
       });
     } else {
@@ -2481,6 +3249,9 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
       }
       if (!data.containsKey('role')) {
         patch['role'] = 'user';
+      }
+      if (!data.containsKey('city')) {
+        patch['city'] = kAvailableCities.first;
       }
 
       if (patch.isNotEmpty) {
@@ -3194,6 +3965,8 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _index = 0;
+  String _selectedCity = kAvailableCities.first;
+  bool _cityLoaded = false;
 
   late final List<Widget> _pages = [
     const FeedScreen(),
@@ -3208,6 +3981,58 @@ class _MainShellState extends State<MainShell> {
     'Заявка',
     'Профиль',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserCity();
+  }
+
+  Future<void> _loadUserCity() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      final city = normalizeCity((snap.data()?['city'] ?? '').toString());
+
+      if (!mounted) return;
+      setState(() {
+        _selectedCity = city;
+        _cityLoaded = true;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _selectedCity = kAvailableCities.first;
+        _cityLoaded = true;
+      });
+    }
+  }
+
+  Future<void> _changeCity(String city) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+      'city': city,
+    }, SetOptions(merge: true));
+
+    if (!mounted) return;
+    setState(() {
+      _selectedCity = city;
+    });
+
+    AppNotice.show(
+      context,
+      message: 'Город обновлён: $city',
+      type: AppNoticeType.success,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -3231,13 +4056,24 @@ class _MainShellState extends State<MainShell> {
             actions: [
               IconButton(
                 tooltip: 'Настройки',
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => SettingsScreen(settings: widget.settings),
-                    ),
-                  );
-                },
+                onPressed: !_cityLoaded
+                    ? null
+                    : () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => SettingsScreen(
+                              isDarkMode: widget.settings.isDarkMode,
+                              onThemeChanged: (value) {
+                                widget.settings.setDarkMode(value);
+                              },
+                              selectedCity: _selectedCity,
+                              onCityChanged: (city) async {
+                                await _changeCity(city);
+                              },
+                            ),
+                          ),
+                        );
+                      },
                 icon: const Icon(Icons.settings_outlined),
               ),
             ],
@@ -3314,110 +4150,61 @@ class FeedScreen extends StatefulWidget {
 }
 
 class _FeedScreenState extends State<FeedScreen> {
-  Position? _myPosition;
-  String? _myCity;
-  bool _loadingLocation = true;
+  bool _loadingCity = true;
+  String _selectedCity = kAvailableCities.first;
 
   @override
   void initState() {
     super.initState();
-    _initLocationAndCity();
+    _loadUserCity();
   }
 
-  Future<void> _initLocationAndCity() async {
-    final result = await AppLocationService().getCurrentLocationWithCity();
+  Future<void> _loadUserCity() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final snap = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+
+    final city = normalizeCity((snap.data()?['city'] ?? '').toString());
 
     if (!mounted) return;
-
-    if (!result.ok) {
-      setState(() {
-        _myPosition = null;
-        _myCity = null;
-        _loadingLocation = false;
-      });
-
-      AppNotice.show(
-        context,
-        message: result.error ?? 'Не удалось определить геолокацию',
-        type: AppNoticeType.error,
-      );
-      return;
-    }
-
     setState(() {
-      _myPosition = Position(
-        longitude: result.lng!,
-        latitude: result.lat!,
-        timestamp: DateTime.now(),
-        accuracy: 0,
-        altitude: 0,
-        altitudeAccuracy: 0,
-        heading: 0,
-        headingAccuracy: 0,
-        speed: 0,
-        speedAccuracy: 0,
-      );
-      _myCity = result.city ?? 'Неизвестно';
-      _loadingLocation = false;
+      _selectedCity = city;
+      _loadingCity = false;
     });
   }
 
-  double? _distanceKm(Map<String, dynamic> data) {
-    if (_myPosition == null) return null;
+  Future<void> _saveCity(String city) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
 
-    final lat = data['lat'];
-    final lng = data['lng'];
+    await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+      'city': city,
+    }, SetOptions(merge: true));
 
-    if (lat is! num || lng is! num) return null;
-
-    final meters = Geolocator.distanceBetween(
-      _myPosition!.latitude,
-      _myPosition!.longitude,
-      lat.toDouble(),
-      lng.toDouble(),
-    );
-
-    return meters / 1000.0;
+    if (!mounted) return;
+    setState(() {
+      _selectedCity = city;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final me = FirebaseAuth.instance.currentUser!;
 
-    if (_loadingLocation) {
+    if (_loadingCity) {
       return const SafeArea(
         child: Center(child: LeafSpinner(size: 30)),
-      );
-    }
-
-    if (_myCity == null || _myCity == 'Неизвестно') {
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Лента заявок',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 12),
-              const Text('Не удалось определить ваш город.'),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: _initLocationAndCity,
-                child: const Text('Попробовать снова'),
-              ),
-            ],
-          ),
-        ),
       );
     }
 
     final q = FirebaseFirestore.instance
         .collection('requests')
         .where('status', isEqualTo: 'open')
-        .where('city', isEqualTo: _myCity)
+        .where('city', isEqualTo: _selectedCity)
         .orderBy('createdAt', descending: true);
 
     return SafeArea(
@@ -3428,12 +4215,27 @@ class _FeedScreenState extends State<FeedScreen> {
           children: [
             const Text(
               'Лента заявок',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              value: _selectedCity,
+              items: kAvailableCities
+                  .map((city) => DropdownMenuItem(
+                        value: city,
+                        child: Text(city),
+                      ))
+                  .toList(),
+              onChanged: (v) async {
+                final city = v ?? kAvailableCities.first;
+                await _saveCity(city);
+              },
+              decoration: const InputDecoration(
+                labelText: 'Выбранный город',
+              ),
             ),
             const SizedBox(height: 8),
-            Text('Ваш город: $_myCity'),
-            const SizedBox(height: 8),
-            const Text('Свои заявки в ленте не показываются.'),
+            Text('Показываются заявки по городу: $_selectedCity'),
             const SizedBox(height: 16),
             Expanded(
               child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -3484,18 +4286,10 @@ class _FeedScreenState extends State<FeedScreen> {
                     return isNotMine && isNotExpired;
                   }).toList();
 
-                  if (_myPosition != null) {
-                    docs.sort((a, b) {
-                      final da = _distanceKm(a.data()) ?? 999999;
-                      final db = _distanceKm(b.data()) ?? 999999;
-                      return da.compareTo(db);
-                    });
-                  }
-
                   if (docs.isEmpty) {
                     return Center(
                       child: Text(
-                        'Пока нет чужих открытых заявок в городе $_myCity.',
+                        'Пока нет чужих открытых заявок в городе $_selectedCity.',
                         textAlign: TextAlign.center,
                       ),
                     );
@@ -3507,7 +4301,6 @@ class _FeedScreenState extends State<FeedScreen> {
                     itemBuilder: (context, i) {
                       final doc = docs[i];
                       final data = doc.data();
-                      final distanceKm = _distanceKm(data);
 
                       return RequestDocCard(
                         requestId: doc.id,
@@ -3518,7 +4311,7 @@ class _FeedScreenState extends State<FeedScreen> {
                         authorId: (data['authorId'] ?? '').toString(),
                         expiresAt: data['expiresAt'] as Timestamp?,
                         city: (data['city'] ?? '').toString(),
-                        distanceKm: distanceKm,
+                        distanceKm: null,
                       );
                     },
                   );
@@ -3571,20 +4364,11 @@ class _RequestDocCardState extends State<RequestDocCard> {
     final diff = ts.toDate().difference(DateTime.now());
 
     if (diff.isNegative) return 'Истекла';
-
-    if (diff.inMinutes < 60) {
-      return '${diff.inMinutes} мин';
-    }
+    if (diff.inMinutes < 60) return '${diff.inMinutes} мин';
 
     final hours = diff.inHours;
     final minutes = diff.inMinutes % 60;
     return '$hours ч $minutes мин';
-  }
-
-  String _formatDistance(double? km) {
-    if (km == null) return 'Неизвестно';
-    if (km < 1) return '${(km * 1000).round()} м';
-    return '${km.toStringAsFixed(1)} км';
   }
 
   Future<void> _help() async {
@@ -3649,8 +4433,6 @@ class _RequestDocCardState extends State<RequestDocCard> {
 
   @override
   Widget build(BuildContext context) {
-    final isNearby = widget.distanceKm != null && widget.distanceKm! <= 5;
-
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -3662,33 +4444,14 @@ class _RequestDocCardState extends State<RequestDocCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
+            Row(
               children: [
-                _InfoChip(
-                  icon: Icons.category_outlined,
-                  text: widget.category,
-                ),
-                if (isNearby)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 7,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: const Text(
-                      'РЯДОМ',
-                      style: TextStyle(
-                        color: Colors.green,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                      ),
-                    ),
+                Expanded(
+                  child: UserMiniProfileButton(
+                    userId: widget.authorId,
                   ),
+                ),
+                const SizedBox(width: 8),
                 if (widget.urgent)
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -3711,6 +4474,21 @@ class _RequestDocCardState extends State<RequestDocCard> {
               ],
             ),
             const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _InfoChip(
+                  icon: Icons.category_outlined,
+                  text: widget.category,
+                ),
+                _InfoChip(
+                  icon: Icons.location_on_outlined,
+                  text: widget.city,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
             Text(
               widget.title,
               style: const TextStyle(
@@ -3726,26 +4504,12 @@ class _RequestDocCardState extends State<RequestDocCard> {
               style: const TextStyle(height: 1.35),
             ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '📍 ${_formatDistance(widget.distanceKm)}',
-                    style: const TextStyle(color: Colors.black54),
-                  ),
-                ),
-                Expanded(
-                  child: Text(
-                    '⏳ ${_formatRemaining(widget.expiresAt)}',
-                    textAlign: TextAlign.end,
-                    style: TextStyle(
-                      color: widget.urgent ? Colors.red : Colors.black54,
-                      fontWeight:
-                          widget.urgent ? FontWeight.w700 : FontWeight.w400,
-                    ),
-                  ),
-                ),
-              ],
+            Text(
+              '⏳ ${_formatRemaining(widget.expiresAt)}',
+              style: TextStyle(
+                color: widget.urgent ? Colors.red : Colors.black54,
+                fontWeight: widget.urgent ? FontWeight.w700 : FontWeight.w400,
+              ),
             ),
             const SizedBox(height: 14),
             SizedBox(
@@ -3868,15 +4632,12 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
   String _category = 'Еда';
   bool _busy = false;
   int _hoursToLive = 24;
-
-  String? _detectedCity;
-  Position? _currentPosition;
-  bool _loadingLocation = true;
+  String _selectedCity = kAvailableCities.first;
 
   @override
   void initState() {
     super.initState();
-    _initLocationAndCity();
+    _loadUserCity();
   }
 
   @override
@@ -3886,43 +4647,20 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
     super.dispose();
   }
 
-  Future<void> _initLocationAndCity() async {
-    setState(() => _loadingLocation = true);
+  Future<void> _loadUserCity() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
 
-    final result = await AppLocationService().getCurrentLocationWithCity();
+    final snap = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+
+    final city = normalizeCity((snap.data()?['city'] ?? '').toString());
 
     if (!mounted) return;
-
-    if (!result.ok) {
-      setState(() {
-        _loadingLocation = false;
-        _detectedCity = null;
-        _currentPosition = null;
-      });
-
-      AppNotice.show(
-        context,
-        message: result.error ?? 'Не удалось определить геолокацию',
-        type: AppNoticeType.error,
-      );
-      return;
-    }
-
     setState(() {
-      _detectedCity = result.city ?? 'Неизвестно';
-      _currentPosition = Position(
-        longitude: result.lng!,
-        latitude: result.lat!,
-        timestamp: DateTime.now(),
-        accuracy: 0,
-        altitude: 0,
-        altitudeAccuracy: 0,
-        heading: 0,
-        headingAccuracy: 0,
-        speed: 0,
-        speedAccuracy: 0,
-      );
-      _loadingLocation = false;
+      _selectedCity = city;
     });
   }
 
@@ -3942,15 +4680,6 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
       return;
     }
 
-    if (_currentPosition == null || _detectedCity == null) {
-      AppNotice.show(
-        context,
-        message: 'Нужна геолокация, чтобы создать заявку',
-        type: AppNoticeType.error,
-      );
-      return;
-    }
-
     setState(() => _busy = true);
 
     try {
@@ -3963,9 +4692,7 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
         'title': t,
         'description': d,
         'category': _category,
-        'city': _detectedCity,
-        'lat': _currentPosition!.latitude,
-        'lng': _currentPosition!.longitude,
+        'city': _selectedCity,
         'urgent': autoUrgent,
         'durationHours': hours,
         'authorId': user.uid,
@@ -3976,6 +4703,7 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
 
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'createdRequestsCount': FieldValue.increment(1),
+        'city': _selectedCity,
       }, SetOptions(merge: true));
 
       final achievementText =
@@ -3992,8 +4720,8 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
       if (!mounted) return;
 
       final text = achievementText == null
-          ? 'Заявка опубликована. Город: $_detectedCity'
-          : 'Заявка опубликована. Город: $_detectedCity\n$achievementText';
+          ? 'Заявка опубликована. Город: $_selectedCity'
+          : 'Заявка опубликована. Город: $_selectedCity\n$achievementText';
 
       AppNotice.show(
         context,
@@ -4027,34 +4755,29 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
         children: [
           const Text(
             'Создать заявку',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 16),
-          if (_loadingLocation)
-            const ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: LeafSpinner(size: 22),
-              title: Text('Определяю ваш город...'),
-            )
-          else
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.04),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                _detectedCity == null
-                    ? 'Город не определён. Включи геолокацию.'
-                    : 'Ваш город: $_detectedCity',
-              ),
+          DropdownButtonFormField<String>(
+            value: _selectedCity,
+            items: kAvailableCities
+                .map((city) => DropdownMenuItem(
+                      value: city,
+                      child: Text(city),
+                    ))
+                .toList(),
+            onChanged: (v) {
+              setState(() => _selectedCity = v ?? kAvailableCities.first);
+            },
+            decoration: const InputDecoration(
+              labelText: 'Город',
             ),
+          ),
           const SizedBox(height: 12),
           TextField(
             controller: _title,
             decoration: const InputDecoration(
               labelText: 'Название',
-              border: OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 12),
@@ -4071,7 +4794,6 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
             onChanged: (v) => setState(() => _category = v ?? 'Еда'),
             decoration: const InputDecoration(
               labelText: 'Категория',
-              border: OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 12),
@@ -4080,7 +4802,6 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
             maxLines: 5,
             decoration: const InputDecoration(
               labelText: 'Описание',
-              border: OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 12),
@@ -4097,7 +4818,6 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
             onChanged: (v) => setState(() => _hoursToLive = v ?? 24),
             decoration: const InputDecoration(
               labelText: 'Сколько держать заявку',
-              border: OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 12),
@@ -5714,7 +6434,8 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() => _sending = true);
     _msg.clear();
 
-    final chatRef = FirebaseFirestore.instance.collection('chats').doc(widget.chatId);
+    final chatRef =
+        FirebaseFirestore.instance.collection('chats').doc(widget.chatId);
 
     try {
       final chatSnap = await chatRef.get();
@@ -5751,7 +6472,8 @@ class _ChatScreenState extends State<ChatScreen> {
         'chatMessagesCount': FieldValue.increment(1),
       }, SetOptions(merge: true));
 
-      final achievementText = await AchievementService().checkAfterFirstChatMessage();
+      final achievementText =
+          await AchievementService().checkAfterFirstChatMessage();
 
       if (achievementText != null && mounted) {
         AppNotice.show(
@@ -5783,86 +6505,122 @@ class _ChatScreenState extends State<ChatScreen> {
         .collection('messages')
         .orderBy('createdAt', descending: false);
 
-    return Scaffold(
-      appBar: AppBar(title: Text(widget.title)),
-      body: Column(
-        children: [
-          Expanded(
-            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: messagesQuery.snapshots(),
-              builder: (context, snap) {
-                if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(child: LeafSpinner(size: 28));
-                }
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('chats')
+          .doc(widget.chatId)
+          .snapshots(),
+      builder: (context, chatSnap) {
+        final chatData = chatSnap.data?.data() ?? {};
+        final members = List<String>.from(chatData['members'] ?? []);
 
-                if (!snap.hasData || snap.data!.docs.isEmpty) {
-                  return const Center(child: Text('Пока нет сообщений'));
-                }
+        String? otherUserId;
+        for (final id in members) {
+          if (id != myId) {
+            otherUserId = id;
+            break;
+          }
+        }
 
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  _markChatAsRead();
-                });
+        return Scaffold(
+          appBar: AppBar(
+            title: otherUserId == null
+                ? Text(widget.title)
+                : UserMiniProfileButton(
+                    userId: otherUserId,
+                    compact: true,
+                  ),
+          ),
+          body: Column(
+            children: [
+              Expanded(
+                child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: messagesQuery.snapshots(),
+                  builder: (context, snap) {
+                    if (snap.connectionState == ConnectionState.waiting) {
+                      return const Center(child: LeafSpinner(size: 28));
+                    }
 
-                final docs = snap.data!.docs;
+                    if (!snap.hasData || snap.data!.docs.isEmpty) {
+                      return const Center(child: Text('Пока нет сообщений'));
+                    }
 
-                return ListView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: docs.length,
-                  itemBuilder: (context, i) {
-                    final data = docs[i].data();
-                    final text = (data['text'] ?? '').toString();
-                    final senderId = (data['senderId'] ?? '').toString();
-                    final isMe = senderId == myId;
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      _markChatAsRead();
+                    });
 
-                    return Align(
-                      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(vertical: 4),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        constraints: const BoxConstraints(maxWidth: 320),
-                        decoration: BoxDecoration(
-                          color: isMe
-                              ? const Color(0xFF7ED957).withOpacity(0.18)
-                              : Colors.black.withOpacity(0.06),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Text(text),
-                      ),
+                    final docs = snap.data!.docs;
+
+                    return ListView.builder(
+                      padding: const EdgeInsets.all(12),
+                      itemCount: docs.length,
+                      itemBuilder: (context, i) {
+                        final data = docs[i].data();
+                        final text = (data['text'] ?? '').toString();
+                        final senderId = (data['senderId'] ?? '').toString();
+                        final isMe = senderId == myId;
+                        final isSystem = senderId == 'system';
+
+                        return Align(
+                          alignment: isSystem
+                              ? Alignment.center
+                              : isMe
+                                  ? Alignment.centerRight
+                                  : Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            constraints: const BoxConstraints(maxWidth: 320),
+                            decoration: BoxDecoration(
+                              color: isSystem
+                                  ? Colors.black.withOpacity(0.06)
+                                  : isMe
+                                      ? const Color(0xFF7ED957).withOpacity(0.18)
+                                      : Colors.black.withOpacity(0.06),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Text(text),
+                          ),
+                        );
+                      },
                     );
                   },
-                );
-              },
-            ),
-          ),
-          SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _msg,
-                      decoration: const InputDecoration(
-                        hintText: 'Сообщение...',
-                        border: OutlineInputBorder(),
-                      ),
-                      onSubmitted: (_) => _send(),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  FilledButton(
-                    onPressed: _sending ? null : _send,
-                    child: _sending
-                        ? const LeafSpinner(size: 18, color: Colors.white)
-                        : const Icon(Icons.send),
-                  ),
-                ],
+                ),
               ),
-            ),
+              SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _msg,
+                          decoration: const InputDecoration(
+                            hintText: 'Сообщение...',
+                            border: OutlineInputBorder(),
+                          ),
+                          onSubmitted: (_) => _send(),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      FilledButton(
+                        onPressed: _sending ? null : _send,
+                        child: _sending
+                            ? const LeafSpinner(size: 18, color: Colors.white)
+                            : const Icon(Icons.send),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
