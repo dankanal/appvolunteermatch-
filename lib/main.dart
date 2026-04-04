@@ -3949,6 +3949,7 @@ class _FeedScreenState extends State<FeedScreen> {
   @override
   Widget build(BuildContext context) {
     final me = FirebaseAuth.instance.currentUser!;
+    final isMobile = MediaQuery.of(context).size.width < 700;
 
     if (_loadingCity) {
       return const SafeArea(
@@ -3958,20 +3959,23 @@ class _FeedScreenState extends State<FeedScreen> {
 
     final q = FirebaseFirestore.instance
         .collection('requests')
-        .where('city', isEqualTo: _selectedCity)
-        .orderBy('createdAt', descending: true);
+        .where('city', isEqualTo: _selectedCity);
 
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(isMobile ? 12 : 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Лента заявок',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+              style: TextStyle(
+                fontSize: isMobile ? 20 : 24,
+                fontWeight: FontWeight.w800,
+              ),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: isMobile ? 10 : 12),
+
             DropdownButtonFormField<String>(
               value: _selectedCity,
               items: kAvailableCities
@@ -3988,53 +3992,102 @@ class _FeedScreenState extends State<FeedScreen> {
                 labelText: 'Выбранный город',
               ),
             ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                SizedBox(
-                  width: 180,
-                  child: DropdownButtonFormField<String>(
-                    value: _categoryFilter,
-                    items: const [
-                      DropdownMenuItem(value: 'Все', child: Text('Все категории')),
-                      DropdownMenuItem(value: 'Еда', child: Text('Еда')),
-                      DropdownMenuItem(value: 'Медицина', child: Text('Медицина')),
-                      DropdownMenuItem(value: 'Учёба', child: Text('Учёба')),
-                      DropdownMenuItem(value: 'Техника', child: Text('Техника')),
-                      DropdownMenuItem(value: 'Разговор', child: Text('Разговор')),
-                      DropdownMenuItem(value: 'Животные', child: Text('Животные')),
-                    ],
-                    onChanged: (v) {
-                      setState(() => _categoryFilter = v ?? 'Все');
-                    },
-                    decoration: const InputDecoration(
-                      labelText: 'Категория',
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  width: 180,
-                  child: DropdownButtonFormField<String>(
-                    value: _tagFilter,
-                    items: [
-                      const DropdownMenuItem(value: 'Все', child: Text('Все теги')),
-                      ...kAvailableRequestTags.map(
-                        (tag) => DropdownMenuItem(value: tag, child: Text(tag)),
+
+            SizedBox(height: isMobile ? 8 : 10),
+
+            if (isMobile)
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: _categoryFilter,
+                      items: const [
+                        DropdownMenuItem(value: 'Все', child: Text('Все категории')),
+                        DropdownMenuItem(value: 'Еда', child: Text('Еда')),
+                        DropdownMenuItem(value: 'Медицина', child: Text('Медицина')),
+                        DropdownMenuItem(value: 'Учёба', child: Text('Учёба')),
+                        DropdownMenuItem(value: 'Техника', child: Text('Техника')),
+                        DropdownMenuItem(value: 'Разговор', child: Text('Разговор')),
+                        DropdownMenuItem(value: 'Животные', child: Text('Животные')),
+                      ],
+                      onChanged: (v) {
+                        setState(() => _categoryFilter = v ?? 'Все');
+                      },
+                      decoration: const InputDecoration(
+                        labelText: 'Категория',
                       ),
-                    ],
-                    onChanged: (v) {
-                      setState(() => _tagFilter = v ?? 'Все');
-                    },
-                    decoration: const InputDecoration(
-                      labelText: 'Тег',
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: _tagFilter,
+                      items: [
+                        const DropdownMenuItem(value: 'Все', child: Text('Все теги')),
+                        ...kAvailableRequestTags.map(
+                          (tag) => DropdownMenuItem(value: tag, child: Text(tag)),
+                        ),
+                      ],
+                      onChanged: (v) {
+                        setState(() => _tagFilter = v ?? 'Все');
+                      },
+                      decoration: const InputDecoration(
+                        labelText: 'Тег',
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            else ...[
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  SizedBox(
+                    width: 220,
+                    child: DropdownButtonFormField<String>(
+                      value: _categoryFilter,
+                      items: const [
+                        DropdownMenuItem(value: 'Все', child: Text('Все категории')),
+                        DropdownMenuItem(value: 'Еда', child: Text('Еда')),
+                        DropdownMenuItem(value: 'Медицина', child: Text('Медицина')),
+                        DropdownMenuItem(value: 'Учёба', child: Text('Учёба')),
+                        DropdownMenuItem(value: 'Техника', child: Text('Техника')),
+                        DropdownMenuItem(value: 'Разговор', child: Text('Разговор')),
+                        DropdownMenuItem(value: 'Животные', child: Text('Животные')),
+                      ],
+                      onChanged: (v) {
+                        setState(() => _categoryFilter = v ?? 'Все');
+                      },
+                      decoration: const InputDecoration(
+                        labelText: 'Категория',
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 220,
+                    child: DropdownButtonFormField<String>(
+                      value: _tagFilter,
+                      items: [
+                        const DropdownMenuItem(value: 'Все', child: Text('Все теги')),
+                        ...kAvailableRequestTags.map(
+                          (tag) => DropdownMenuItem(value: tag, child: Text(tag)),
+                        ),
+                      ],
+                      onChanged: (v) {
+                        setState(() => _tagFilter = v ?? 'Все');
+                      },
+                      decoration: const InputDecoration(
+                        labelText: 'Тег',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+
+            SizedBox(height: isMobile ? 8 : 10),
+
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -4051,9 +4104,11 @@ class _FeedScreenState extends State<FeedScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+
+            SizedBox(height: isMobile ? 8 : 10),
             Text('Показываются заявки по городу: $_selectedCity'),
-            const SizedBox(height: 16),
+            SizedBox(height: isMobile ? 10 : 14),
+
             Expanded(
               child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                 stream: q.snapshots(),
@@ -4073,24 +4128,6 @@ class _FeedScreenState extends State<FeedScreen> {
                   }
 
                   final now = DateTime.now();
-
-                  for (final d in snap.data!.docs) {
-                    final data = d.data();
-                    final expires = data['expiresAt'] as Timestamp?;
-                    final status = (data['status'] ?? '').toString();
-
-                    if (expires != null &&
-                        expires.toDate().isBefore(now) &&
-                        status != 'done' &&
-                        status != 'cancelled') {
-                      FirebaseFirestore.instance
-                          .collection('requests')
-                          .doc(d.id)
-                          .set({
-                        'status': 'expired',
-                      }, SetOptions(merge: true));
-                    }
-                  }
 
                   final docs = snap.data!.docs.where((d) {
                     final data = d.data();
@@ -4122,8 +4159,7 @@ class _FeedScreenState extends State<FeedScreen> {
                         ? true
                         : tags.contains(_tagFilter);
                     final matchesUrgent = !_urgentOnly || urgent;
-                    final stillNeedsHelpers =
-                        acceptedCount < helpersNeeded;
+                    final stillNeedsHelpers = acceptedCount < helpersNeeded;
                     final matchesHelpers =
                         !_onlyNeedHelpers || stillNeedsHelpers;
 
@@ -4136,8 +4172,16 @@ class _FeedScreenState extends State<FeedScreen> {
                         matchesHelpers;
                   }).toList();
 
+                  docs.sort((a, b) {
+                    final ta =
+                        (a.data()['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+                    final tb =
+                        (b.data()['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+                    return tb.compareTo(ta);
+                  });
+
                   if (docs.isEmpty) {
-                    return Center(
+                    return const Center(
                       child: Text(
                         'По этим фильтрам заявок не найдено.',
                         textAlign: TextAlign.center,
@@ -4147,7 +4191,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
                   return ListView.separated(
                     itemCount: docs.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    separatorBuilder: (_, __) => SizedBox(height: isMobile ? 10 : 12),
                     itemBuilder: (context, i) {
                       final doc = docs[i];
                       final data = doc.data();
@@ -4234,6 +4278,8 @@ class _RequestDocCardState extends State<RequestDocCard> {
   }
 
   Future<void> _help() async {
+    if (_opening) return;
+
     final me = FirebaseAuth.instance.currentUser!;
     setState(() => _opening = true);
 
@@ -4242,141 +4288,131 @@ class _RequestDocCardState extends State<RequestDocCard> {
           .collection('requests')
           .doc(widget.requestId);
 
-      final requestSnap = await requestRef.get();
-      final requestData = requestSnap.data() ?? {};
+      String finalChatId = '';
 
-      final status = (requestData['status'] ?? '').toString();
-      final authorId = (requestData['authorId'] ?? '').toString();
-      final helpersNeeded = (requestData['helpersNeeded'] is num)
-          ? (requestData['helpersNeeded'] as num).toInt()
-          : 1;
-      final acceptedHelpers =
-          List<String>.from(requestData['acceptedHelpers'] ?? []);
-      final existingChatId = (requestData['chatId'] ?? '').toString();
+      await FirebaseFirestore.instance.runTransaction((tx) async {
+        final requestSnap = await tx.get(requestRef);
+        final requestData = requestSnap.data();
 
-      if (authorId == me.uid) {
-        if (!mounted) return;
-        AppNotice.show(
-          context,
-          message: 'Нельзя откликнуться на свою заявку',
-          type: AppNoticeType.info,
-        );
-        return;
-      }
-
-      if (status == 'done' || status == 'cancelled' || status == 'expired') {
-        if (!mounted) return;
-        AppNotice.show(
-          context,
-          message: 'Эта заявка уже закрыта',
-          type: AppNoticeType.info,
-        );
-        return;
-      }
-
-      if (acceptedHelpers.contains(me.uid)) {
-        if (existingChatId.isNotEmpty && mounted) {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => ChatScreen(
-                chatId: existingChatId,
-                title: widget.title,
-              ),
-            ),
-          );
-        } else if (mounted) {
-          AppNotice.show(
-            context,
-            message: 'Ты уже откликнулся на эту заявку',
-            type: AppNoticeType.info,
-          );
-        }
-        return;
-      }
-
-      if (acceptedHelpers.length >= helpersNeeded) {
-        if (!mounted) return;
-        AppNotice.show(
-          context,
-          message: 'Нужное количество помощников уже набрано',
-          type: AppNoticeType.info,
-        );
-        return;
-      }
-
-      String chatId = existingChatId;
-      final newAcceptedHelpers = [...acceptedHelpers, me.uid];
-      final newAcceptedCount = newAcceptedHelpers.length;
-
-      if (chatId.isEmpty) {
-        final chatRef = FirebaseFirestore.instance.collection('chats').doc();
-
-        await chatRef.set({
-          'chatId': chatRef.id,
-          'requestId': widget.requestId,
-          'requestTitle': widget.title,
-          'requestCategory': widget.category,
-          'members': [authorId, ...newAcceptedHelpers],
-          'createdAt': FieldValue.serverTimestamp(),
-          'lastMessage': '',
-          'lastMessageAt': FieldValue.serverTimestamp(),
-          'unreadCountMap': {
-            authorId: 0,
-            for (final uid in newAcceptedHelpers) uid: 0,
-          },
-        });
-
-        await chatRef.collection('messages').add({
-          'text': 'Чат создан. Опиши детали помощи здесь.',
-          'senderId': 'system',
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-
-        chatId = chatRef.id;
-      } else {
-        final chatRef = FirebaseFirestore.instance.collection('chats').doc(chatId);
-
-        final chatSnap = await chatRef.get();
-        final chatData = chatSnap.data() ?? {};
-        final members = List<String>.from(chatData['members'] ?? []);
-
-        if (!members.contains(me.uid)) {
-          members.add(me.uid);
+        if (requestData == null) {
+          throw Exception('Заявка не найдена');
         }
 
-        final unreadCountMap =
-            Map<String, dynamic>.from(chatData['unreadCountMap'] ?? {});
-        unreadCountMap[me.uid] = 0;
+        final status = (requestData['status'] ?? '').toString();
+        final authorId = (requestData['authorId'] ?? '').toString();
+        final helpersNeeded = (requestData['helpersNeeded'] is num)
+            ? (requestData['helpersNeeded'] as num).toInt()
+            : 1;
+        final acceptedHelpers =
+            List<String>.from(requestData['acceptedHelpers'] ?? []);
+        final existingChatId = (requestData['chatId'] ?? '').toString();
 
-        await chatRef.set({
-          'members': members,
-          'unreadCountMap': unreadCountMap,
-          'lastMessage': 'Новый помощник присоединился к заявке.',
-          'lastMessageAt': FieldValue.serverTimestamp(),
+        if (authorId == me.uid) {
+          throw Exception('Нельзя откликнуться на свою заявку');
+        }
+
+        if (status == 'done' || status == 'cancelled' || status == 'expired') {
+          throw Exception('Эта заявка уже закрыта');
+        }
+
+        if (acceptedHelpers.contains(me.uid)) {
+          if (existingChatId.isNotEmpty) {
+            finalChatId = existingChatId;
+            return;
+          }
+          throw Exception('Ты уже откликнулся на эту заявку');
+        }
+
+        if (acceptedHelpers.length >= helpersNeeded) {
+          throw Exception('Нужное количество помощников уже набрано');
+        }
+
+        final newAcceptedHelpers = [...acceptedHelpers, me.uid];
+        final newAcceptedCount = newAcceptedHelpers.length;
+
+        String chatId = existingChatId;
+
+        if (chatId.isEmpty) {
+          final chatRef = FirebaseFirestore.instance.collection('chats').doc();
+          chatId = chatRef.id;
+
+          tx.set(chatRef, {
+            'chatId': chatId,
+            'requestId': widget.requestId,
+            'requestTitle': widget.title,
+            'requestCategory': widget.category,
+            'members': [authorId, ...newAcceptedHelpers],
+            'createdAt': FieldValue.serverTimestamp(),
+            'lastMessage': '',
+            'lastMessageAt': FieldValue.serverTimestamp(),
+            'unreadCountMap': {
+              authorId: 0,
+              for (final uid in newAcceptedHelpers) uid: 0,
+            },
+          });
+
+          final systemMsgRef = chatRef.collection('messages').doc();
+          tx.set(systemMsgRef, {
+            'text': 'Чат создан. Опиши детали помощи здесь.',
+            'senderId': 'system',
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+        } else {
+          final chatRef = FirebaseFirestore.instance.collection('chats').doc(chatId);
+          final chatSnap = await tx.get(chatRef);
+          final chatData = chatSnap.data() ?? {};
+
+          final members = List<String>.from(chatData['members'] ?? []);
+          if (!members.contains(me.uid)) {
+            members.add(me.uid);
+          }
+
+          final unreadCountMap =
+              Map<String, dynamic>.from(chatData['unreadCountMap'] ?? {});
+          unreadCountMap[me.uid] = 0;
+
+          tx.set(chatRef, {
+            'members': members,
+            'unreadCountMap': unreadCountMap,
+            'lastMessage': 'Новый помощник присоединился к заявке.',
+            'lastMessageAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+
+          final systemMsgRef = chatRef.collection('messages').doc();
+          tx.set(systemMsgRef, {
+            'text': 'Новый помощник присоединился к заявке.',
+            'senderId': 'system',
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+        }
+
+        tx.set(requestRef, {
+          'chatId': chatId,
+          'status': 'in_chat',
+          'acceptedHelpers': newAcceptedHelpers,
+          'acceptedHelpersCount': newAcceptedCount,
+          'acceptedBy': acceptedHelpers.isEmpty ? me.uid : requestData['acceptedBy'],
+          'acceptedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
 
-        await chatRef.collection('messages').add({
-          'text': 'Новый помощник присоединился к заявке.',
-          'senderId': 'system',
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-      }
-
-      await requestRef.set({
-        'chatId': chatId,
-        'status': newAcceptedCount >= helpersNeeded ? 'in_chat' : 'open',
-        'acceptedHelpers': newAcceptedHelpers,
-        'acceptedHelpersCount': newAcceptedCount,
-        'acceptedBy': acceptedHelpers.isEmpty ? me.uid : requestData['acceptedBy'],
-        'acceptedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+        finalChatId = chatId;
+      });
 
       if (!mounted) return;
+
+      if (finalChatId.isEmpty) {
+        AppNotice.show(
+          context,
+          message: 'Не удалось открыть чат',
+          type: AppNoticeType.error,
+        );
+        return;
+      }
 
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => ChatScreen(
-            chatId: chatId,
+            chatId: finalChatId,
             title: widget.title,
           ),
         ),
@@ -4395,118 +4431,170 @@ class _RequestDocCardState extends State<RequestDocCard> {
 
   @override
   Widget build(BuildContext context) {
+    final visual = getRequestVisualConfig(widget.category);
     final acceptedCount = widget.acceptedHelpers.length;
     final stillNeeds = acceptedCount < widget.helpersNeeded;
+    final isMobile = MediaQuery.of(context).size.width < 700;
 
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: Colors.black.withOpacity(0.06)),
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: visual.gradient,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.18),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Stack(
           children: [
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _InfoChip(
-                  icon: Icons.category_outlined,
-                  text: widget.category,
+            Positioned(
+              right: -18,
+              bottom: -18,
+              child: Icon(
+                visual.icon,
+                size: isMobile ? 100 : 132,
+                color: Colors.white.withOpacity(0.09),
+              ),
+            ),
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withOpacity(0.08),
+                      Colors.black.withOpacity(0.18),
+                      Colors.black.withOpacity(0.30),
+                    ],
+                  ),
                 ),
-                _InfoChip(
-                  icon: Icons.location_on_outlined,
-                  text: widget.city,
-                ),
-                _InfoChip(
-                  icon: Icons.groups_2_outlined,
-                  text: '$acceptedCount / ${widget.helpersNeeded} помощ.',
-                ),
-                if (widget.urgent)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 7,
+              ),
+            ),
+            Padding(
+              padding: EdgeInsets.all(isMobile ? 14 : 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: UserMiniProfileButton(
+                          userId: widget.authorId,
+                          compact: isMobile,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      if (widget.urgent) const _UrgentGlassBadge(),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _GlassChip(
+                        icon: Icons.category_outlined,
+                        text: widget.category,
+                      ),
+                      _GlassChip(
+                        icon: Icons.location_on_outlined,
+                        text: widget.city,
+                      ),
+                      _GlassChip(
+                        icon: Icons.groups_2_outlined,
+                        text: stillNeeds
+                            ? 'Нужно ещё: ${widget.helpersNeeded - acceptedCount}'
+                            : 'Все набраны',
+                      ),
+                    ],
+                  ),
+                  if (widget.tags.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: widget.tags.take(3).map((tag) {
+                        return _GlassChip(
+                          icon: Icons.tag,
+                          text: tag,
+                        );
+                      }).toList(),
                     ),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(999),
+                  ],
+                  const SizedBox(height: 14),
+                  Text(
+                    widget.title,
+                    style: TextStyle(
+                      fontSize: isMobile ? 20 : 28,
+                      fontWeight: FontWeight.w900,
+                      height: 1.0,
+                      color: Colors.white,
                     ),
-                    child: const Text(
-                      'СРОЧНО',
-                      style: TextStyle(
-                        color: Colors.red,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    widget.description,
+                    maxLines: isMobile ? 2 : 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      height: 1.4,
+                      color: Colors.white.withOpacity(0.93),
+                      fontSize: isMobile ? 14 : 15,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.hourglass_bottom_rounded,
+                        size: 18,
+                        color: Colors.white.withOpacity(0.78),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        _formatRemaining(widget.expiresAt),
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.78),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: (_opening || !stillNeeds) ? null : _help,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF4E7F2F),
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(
+                          vertical: isMobile ? 14 : 16,
+                        ),
+                      ),
+                      icon: _opening
+                          ? const LeafSpinner(size: 18, color: Colors.white)
+                          : const Icon(Icons.favorite_border),
+                      label: Text(
+                        _opening
+                            ? 'Открываю...'
+                            : stillNeeds
+                                ? 'Помочь'
+                                : 'Набрано',
                       ),
                     ),
                   ),
-              ],
-            ),
-            if (widget.tags.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: widget.tags.map((tag) {
-                  return _InfoChip(
-                    icon: Icons.sell_outlined,
-                    text: tag,
-                  );
-                }).toList(),
-              ),
-            ],
-            const SizedBox(height: 12),
-            Text(
-              widget.title,
-              style: const TextStyle(
-                fontSize: 19,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              widget.description,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(height: 1.35),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              stillNeeds
-                  ? 'Нужно ещё: ${widget.helpersNeeded - acceptedCount}'
-                  : 'Все помощники уже набраны',
-              style: TextStyle(
-                color: stillNeeds ? Colors.black87 : Colors.green,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '⏳ ${_formatRemaining(widget.expiresAt)}',
-              style: TextStyle(
-                color: widget.urgent ? Colors.red : Colors.black54,
-                fontWeight: widget.urgent ? FontWeight.w700 : FontWeight.w400,
-              ),
-            ),
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: (_opening || !stillNeeds) ? null : _help,
-                icon: _opening
-                    ? const LeafSpinner(size: 18, color: Colors.white)
-                    : const Icon(Icons.favorite_border),
-                label: Text(
-                  _opening
-                      ? 'Открываю...'
-                      : stillNeeds
-                          ? 'Помочь'
-                          : 'Набрано',
-                ),
+                ],
               ),
             ),
           ],
