@@ -65,6 +65,8 @@ String normalizeCity(String? city) {
   if (kAvailableCities.contains(value)) return value;
   return kAvailableCities.first;
 }
+
+
 class EventRegistrationDialog extends StatefulWidget {
   final String eventId;
   final Map<String, dynamic> eventData;
@@ -78,8 +80,6 @@ class EventRegistrationDialog extends StatefulWidget {
   @override
   State<EventRegistrationDialog> createState() => _EventRegistrationDialogState();
 }
-
-
 
 class _EventRegistrationDialogState extends State<EventRegistrationDialog> {
   final _fullNameCtrl = TextEditingController();
@@ -103,6 +103,17 @@ class _EventRegistrationDialogState extends State<EventRegistrationDialog> {
     final askFullName = widget.eventData['askFullName'] == true;
     final askSchool = widget.eventData['askSchool'] == true;
     final askUniversity = widget.eventData['askUniversity'] == true;
+    final recruitmentStatus =
+        (widget.eventData['recruitmentStatus'] ?? 'open').toString();
+
+    if (recruitmentStatus == 'closed') {
+      AppNotice.show(
+        context,
+        message: 'Набор на ивент закрыт',
+        type: AppNoticeType.error,
+      );
+      return;
+    }
 
     if (askFullName && _fullNameCtrl.text.trim().isEmpty) {
       AppNotice.show(
@@ -134,11 +145,25 @@ class _EventRegistrationDialogState extends State<EventRegistrationDialog> {
     setState(() => _busy = true);
 
     try {
-      final regRef = FirebaseFirestore.instance
-          .collection('events')
-          .doc(widget.eventId)
-          .collection('registrations')
-          .doc(user.uid);
+      final eventRef =
+          FirebaseFirestore.instance.collection('events').doc(widget.eventId);
+
+      final participantsSnap = await eventRef.collection('registrations').get();
+      final participantsCount = participantsSnap.docs.length;
+      final capacity = (widget.eventData['capacity'] is num)
+          ? (widget.eventData['capacity'] as num).toInt()
+          : 0;
+
+      if (capacity > 0 && participantsCount >= capacity) {
+        AppNotice.show(
+          context,
+          message: 'Свободных мест больше нет',
+          type: AppNoticeType.error,
+        );
+        return;
+      }
+
+      final regRef = eventRef.collection('registrations').doc(user.uid);
 
       await regRef.set({
         'userId': user.uid,
@@ -146,6 +171,32 @@ class _EventRegistrationDialogState extends State<EventRegistrationDialog> {
         'fullName': _fullNameCtrl.text.trim(),
         'school': _schoolCtrl.text.trim(),
         'university': _universityCtrl.text.trim(),
+        'eventCity': (widget.eventData['city'] ?? '').toString(),
+        'eventFormat': (widget.eventData['eventFormat'] ?? 'offline').toString(),
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      final chatId = await ensureEventChat(
+        eventId: widget.eventId,
+        eventData: widget.eventData,
+        joinedUserId: user.uid,
+      );
+
+      await FirebaseFirestore.instance.collection('event_chats').doc(chatId).set({
+        'members': FieldValue.arrayUnion([user.uid]),
+        'lastMessage': 'Новый участник зарегистрировался на ивент',
+        'lastMessageType': 'system',
+        'lastMessageAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      await FirebaseFirestore.instance
+          .collection('event_chats')
+          .doc(chatId)
+          .collection('messages')
+          .add({
+        'type': 'system',
+        'text': 'Новый участник зарегистрировался на ивент.',
+        'senderId': 'system',
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -184,27 +235,21 @@ class _EventRegistrationDialogState extends State<EventRegistrationDialog> {
             if (askFullName) ...[
               TextField(
                 controller: _fullNameCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Имя и фамилия',
-                ),
+                decoration: const InputDecoration(labelText: 'Имя и фамилия'),
               ),
               const SizedBox(height: 12),
             ],
             if (askSchool) ...[
               TextField(
                 controller: _schoolCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Школа',
-                ),
+                decoration: const InputDecoration(labelText: 'Школа'),
               ),
               const SizedBox(height: 12),
             ],
             if (askUniversity) ...[
               TextField(
                 controller: _universityCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Университет',
-                ),
+                decoration: const InputDecoration(labelText: 'Университет'),
               ),
               const SizedBox(height: 12),
             ],
@@ -228,6 +273,222 @@ class _EventRegistrationDialogState extends State<EventRegistrationDialog> {
 }
 
 
+class EventChatScreen extends StatefulWidget {
+  final String eventId;
+  final String chatId;
+  final String title;
+
+  const EventChatScreen({
+    super.key,
+    required this.eventId,
+    required this.chatId,
+    required this.title,
+  });
+
+  @override
+  State<EventChatScreen> createState() => _EventChatScreenState();
+}
+
+class _EventChatScreenState extends State<EventChatScreen> {
+  final _msg = TextEditingController();
+  bool _sending = false;
+
+  @override
+  void dispose() {
+    _msg.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final text = _msg.text.trim();
+    if (text.isEmpty) return;
+
+    setState(() => _sending = true);
+
+    try {
+      final chatRef =
+          FirebaseFirestore.instance.collection('event_chats').doc(widget.chatId);
+
+      await chatRef.collection('messages').add({
+        'type': 'text',
+        'text': text,
+        'senderId': user.uid,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      await chatRef.set({
+        'lastMessage': text,
+        'lastMessageType': 'text',
+        'lastMessageAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      _msg.clear();
+    } catch (e) {
+      if (!mounted) return;
+      AppNotice.show(
+        context,
+        message: 'Ошибка отправки: $e',
+        type: AppNoticeType.error,
+      );
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final messagesStream = FirebaseFirestore.instance
+        .collection('event_chats')
+        .doc(widget.chatId)
+        .collection('messages')
+        .orderBy('createdAt')
+        .snapshots();
+
+    final myId = FirebaseAuth.instance.currentUser?.uid;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Чат: ${widget.title}'),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: messagesStream,
+              builder: (context, snap) {
+                if (!snap.hasData) {
+                  return const Center(child: LeafSpinner(size: 28));
+                }
+
+                final docs = snap.data!.docs;
+
+                if (docs.isEmpty) {
+                  return const Center(
+                    child: Text('Сообщений пока нет'),
+                  );
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: docs.length,
+                  itemBuilder: (context, i) {
+                    final data = docs[i].data();
+                    final senderId = (data['senderId'] ?? '').toString();
+                    final text = (data['text'] ?? '').toString();
+                    final isSystem = senderId == 'system';
+                    final isMine = senderId == myId;
+
+                    return Align(
+                      alignment: isSystem
+                          ? Alignment.center
+                          : isMine
+                              ? Alignment.centerRight
+                              : Alignment.centerLeft,
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        constraints: const BoxConstraints(maxWidth: 320),
+                        decoration: BoxDecoration(
+                          color: isSystem
+                              ? const Color(0xFFE8EEF8)
+                              : isMine
+                                  ? const Color(0xFFA8E932)
+                                  : const Color(0xFF1E2A4A),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text(
+                          text,
+                          style: TextStyle(
+                            color: isSystem
+                                ? const Color(0xFF24324A)
+                                : isMine
+                                    ? Colors.black
+                                    : Colors.white,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _msg,
+                      decoration: const InputDecoration(
+                        hintText: 'Сообщение в чат ивента...',
+                      ),
+                      onSubmitted: (_) => _send(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: _sending ? null : _send,
+                    child: _sending
+                        ? const LeafSpinner(size: 18, color: Colors.white)
+                        : const Icon(Icons.send),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
+String getEventFormatLabel(String value) {
+  switch (value) {
+    case 'online':
+      return 'Онлайн';
+    case 'offline':
+      return 'Офлайн';
+    default:
+      return 'Не указано';
+  }
+}
+
+String getEventRecruitmentLabel(String value) {
+  switch (value) {
+    case 'open':
+      return 'Набор открыт';
+    case 'in_progress':
+      return 'В процессе';
+    case 'closed':
+      return 'Набор закрыт';
+    default:
+      return 'Не указано';
+  }
+}
+
+Color getEventRecruitmentColor(String value) {
+  switch (value) {
+    case 'open':
+      return const Color(0xFF2E7D32);
+    case 'in_progress':
+      return const Color(0xFFF57C00);
+    case 'closed':
+      return Colors.red;
+    default:
+      return const Color(0xFF6B7280);
+  }
+}
+
 class EventDetailsDialog extends StatelessWidget {
   final String eventId;
   final Map<String, dynamic> data;
@@ -238,98 +499,543 @@ class EventDetailsDialog extends StatelessWidget {
     required this.data,
   });
 
+
+  Future<Map<String, dynamic>> _loadViewerInfo() async {
+    final me = FirebaseAuth.instance.currentUser;
+    if (me == null) return {};
+    final snap = await FirebaseFirestore.instance.collection('users').doc(me.uid).get();
+    return snap.data() ?? {};
+  }
+
+  Future<void> _deleteEvent(BuildContext context) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Удалить ивент?'),
+        content: const Text('Это действие нельзя отменить.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true) return;
+
+    try {
+      await FirebaseFirestore.instance.collection('events').doc(eventId).delete();
+
+      if (!context.mounted) return;
+      Navigator.of(context).pop();
+
+      AppNotice.show(
+        context,
+        message: 'Ивент удалён',
+        type: AppNoticeType.success,
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      AppNotice.show(
+        context,
+        message: 'Ошибка удаления: $e',
+        type: AppNoticeType.error,
+      );
+    }
+  }
+
+  Future<void> _openEditDialog(BuildContext context) async {
+    final titleCtrl = TextEditingController(text: (data['title'] ?? '').toString());
+    final descCtrl = TextEditingController(text: (data['description'] ?? '').toString());
+    final placeCtrl = TextEditingController(text: (data['place'] ?? '').toString());
+
+    final imageService = CloudinaryImageService();
+
+    String imageUrl = (data['imageUrl'] ?? '').toString();
+    bool imageUploading = false;
+
+    DateTime startAt =
+        (data['startAt'] as Timestamp?)?.toDate() ?? DateTime.now().add(const Duration(days: 1));
+
+    bool askFullName = data['askFullName'] == true;
+    bool askSchool = data['askSchool'] == true;
+    bool askUniversity = data['askUniversity'] == true;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setLocal) {
+          Future<void> pickEventImage() async {
+            setLocal(() => imageUploading = true);
+            try {
+              final url = await imageService.pickAndUploadImage(
+                folder: 'volunteer_match/events',
+                imageQuality: 85,
+              );
+
+              if (url != null) {
+                setLocal(() => imageUrl = url);
+              }
+            } catch (e) {
+              if (context.mounted) {
+                AppNotice.show(
+                  context,
+                  message: 'Ошибка загрузки картинки: $e',
+                  type: AppNoticeType.error,
+                );
+              }
+            } finally {
+              setLocal(() => imageUploading = false);
+            }
+          }
+
+          return AlertDialog(
+            title: const Text('Редактировать ивент'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: titleCtrl,
+                    decoration: const InputDecoration(labelText: 'Название'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: placeCtrl,
+                    decoration: const InputDecoration(labelText: 'Место'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: descCtrl,
+                    maxLines: 4,
+                    decoration: const InputDecoration(labelText: 'Описание'),
+                  ),
+                  const SizedBox(height: 12),
+                  if (imageUrl.isNotEmpty)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Image.network(
+                        imageUrl,
+                        height: 160,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: imageUploading ? null : pickEventImage,
+                      icon: imageUploading
+                          ? const LeafSpinner(size: 18)
+                          : const Icon(Icons.image_outlined),
+                      label: Text(
+                        imageUploading
+                            ? 'Загрузка...'
+                            : imageUrl.isEmpty
+                                ? 'Загрузить картинку'
+                                : 'Заменить картинку',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  CheckboxListTile(
+                    value: askFullName,
+                    onChanged: (v) => setLocal(() => askFullName = v ?? false),
+                    title: const Text('Спрашивать имя и фамилию'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  CheckboxListTile(
+                    value: askSchool,
+                    onChanged: (v) => setLocal(() => askSchool = v ?? false),
+                    title: const Text('Спрашивать школу'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  CheckboxListTile(
+                    value: askUniversity,
+                    onChanged: (v) => setLocal(() => askUniversity = v ?? false),
+                    title: const Text('Спрашивать университет'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  const SizedBox(height: 12),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.schedule),
+                    title: Text(DateFormat('dd.MM.yyyy HH:mm').format(startAt)),
+                    trailing: TextButton(
+                      onPressed: () async {
+                        final date = await showDatePicker(
+                          context: context,
+                          firstDate: DateTime.now().subtract(const Duration(days: 1)),
+                          lastDate: DateTime.now().add(const Duration(days: 365)),
+                          initialDate: startAt,
+                        );
+                        if (date == null) return;
+
+                        final time = await showTimePicker(
+                          context: context,
+                          initialTime: TimeOfDay.fromDateTime(startAt),
+                        );
+                        if (time == null) return;
+
+                        setLocal(() {
+                          startAt = DateTime(
+                            date.year,
+                            date.month,
+                            date.day,
+                            time.hour,
+                            time.minute,
+                          );
+                        });
+                      },
+                      child: const Text('Выбрать'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Отмена'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Сохранить'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (ok != true) return;
+
+    if (titleCtrl.text.trim().isEmpty || descCtrl.text.trim().isEmpty) {
+      if (!context.mounted) return;
+      AppNotice.show(
+        context,
+        message: 'Заполни название и описание',
+        type: AppNoticeType.error,
+      );
+      return;
+    }
+
+    try {
+      await FirebaseFirestore.instance.collection('events').doc(eventId).set({
+        'title': titleCtrl.text.trim(),
+        'description': descCtrl.text.trim(),
+        'place': placeCtrl.text.trim(),
+        'imageUrl': imageUrl,
+        'startAt': Timestamp.fromDate(startAt),
+        'askFullName': askFullName,
+        'askSchool': askSchool,
+        'askUniversity': askUniversity,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      if (!context.mounted) return;
+      Navigator.of(context).pop();
+
+      AppNotice.show(
+        context,
+        message: 'Ивент обновлён',
+        type: AppNoticeType.success,
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      AppNotice.show(
+        context,
+        message: 'Ошибка обновления: $e',
+        type: AppNoticeType.error,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final title = (data['title'] ?? '').toString();
     final description = (data['description'] ?? '').toString();
     final imageUrl = (data['imageUrl'] ?? '').toString();
     final place = (data['place'] ?? '').toString();
+    final city = (data['city'] ?? '').toString();
+    final eventFormat = (data['eventFormat'] ?? 'offline').toString();
+    final recruitmentStatus = (data['recruitmentStatus'] ?? 'open').toString();
+    final createdBy = (data['createdBy'] ?? '').toString();
+    final chatId = (data['chatId'] ?? '').toString();
+    final capacity = (data['capacity'] is num) ? (data['capacity'] as num).toInt() : 0;
     final startAt = data['startAt'] as Timestamp?;
+    final me = FirebaseAuth.instance.currentUser;
+    final isOwner = me != null && me.uid == createdBy;
+
     final dateText = startAt == null
         ? 'Дата не указана'
         : DateFormat('dd.MM.yyyy • HH:mm').format(startAt.toDate());
 
-    return Dialog(
-      insetPadding: const EdgeInsets.all(16),
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 700),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (imageUrl.isNotEmpty)
-              ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-                child: Image.network(
-                  imageUrl,
-                  height: 240,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                ),
-              ),
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _loadViewerInfo(),
+      builder: (context, viewerSnap) {
+        final viewerRole = (viewerSnap.data?['role'] ?? 'user').toString();
+        final isAdmin = viewerRole == 'admin';
+
+        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance
+              .collection('events')
+              .doc(eventId)
+              .collection('registrations')
+              .snapshots(),
+          builder: (context, regSnap) {
+            final regs = regSnap.data?.docs ?? [];
+            final participantsCount = regs.length;
+            final alreadyJoined = me != null && regs.any((e) => e.id == me.uid);
+            final canSeeParticipants = me != null && (me.uid == createdBy || isAdmin);
+            final isFull = capacity > 0 && participantsCount >= capacity;
+            final canJoin = !alreadyJoined &&
+                !isFull &&
+                recruitmentStatus != 'closed';
+
+            return Dialog(
+              insetPadding: const EdgeInsets.all(16),
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 700),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w900,
+                    if (imageUrl.isNotEmpty)
+                      ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(28),
+                        ),
+                        child: Image.network(
+                          imageUrl,
+                          height: 240,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      dateText,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF466E2D),
-                      ),
-                    ),
-                    if (place.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text('📍 $place'),
-                    ],
-                    const SizedBox(height: 16),
-                    Text(
-                      description,
-                      style: const TextStyle(height: 1.5),
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: FilledButton(
-                            onPressed: () {
-                              Navigator.of(context).pop();
-                              showDialog(
-                                context: context,
-                                builder: (_) => EventRegistrationDialog(
-                                  eventId: eventId,
-                                  eventData: data,
+                    Flexible(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              style: const TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              dateText,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF466E2D),
+                              ),
+                            ),
+
+                            const SizedBox(height: 12),
+
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                _EventInfoChip(
+                                  icon: eventFormat == 'online'
+                                      ? Icons.videocam_outlined
+                                      : Icons.location_city_outlined,
+                                  text: getEventFormatLabel(eventFormat),
                                 ),
-                              );
-                            },
-                            child: const Text('Участвовать'),
-                          ),
+                                _EventInfoChip(
+                                  icon: Icons.flag_outlined,
+                                  text: getEventRecruitmentLabel(recruitmentStatus),
+                                  color: getEventRecruitmentColor(recruitmentStatus),
+                                ),
+                                if (city.isNotEmpty)
+                                  _EventInfoChip(
+                                    icon: Icons.location_on_outlined,
+                                    text: city,
+                                  ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 12),
+
+                            Row(
+                              children: [
+                                Icon(
+                                  isFull ? Icons.block : Icons.groups_2_outlined,
+                                  size: 18,
+                                  color: isFull ? Colors.red : const Color(0xFF466E2D),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  capacity > 0
+                                      ? '$participantsCount / $capacity'
+                                      : '$participantsCount участников',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    color: isFull ? Colors.red : Colors.black87,
+                                  ),
+                                ),
+                                if (isFull) ...[
+                                  const SizedBox(width: 10),
+                                  const Text(
+                                    'Мест нет',
+                                    style: TextStyle(
+                                      color: Colors.red,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+
+                            if (place.isNotEmpty) ...[
+                              const SizedBox(height: 10),
+                              Text('📍 $place'),
+                            ],
+
+                            if (canSeeParticipants) ...[
+                              const SizedBox(height: 16),
+                              const Text(
+                                'Участники',
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              if (regs.isEmpty)
+                                Text(
+                                  'Пока никто не зарегистрировался',
+                                  style: TextStyle(
+                                    color: Colors.black.withOpacity(0.6),
+                                  ),
+                                )
+                              else
+                                SizedBox(
+                                  height: 50,
+                                  child: ListView.separated(
+                                    scrollDirection: Axis.horizontal,
+                                    itemCount: regs.length,
+                                    separatorBuilder: (_, __) => const SizedBox(width: 8),
+                                    itemBuilder: (context, i) {
+                                      final userId = regs[i].id;
+                                      return UserMiniProfileButton(
+                                        userId: userId,
+                                        compact: true,
+                                      );
+                                    },
+                                  ),
+                                ),
+                            ],
+
+                            const SizedBox(height: 16),
+                            Text(
+                              description,
+                              style: const TextStyle(height: 1.5),
+                            ),
+                            const SizedBox(height: 20),
+
+                            if (isOwner) ...[
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      onPressed: () => _openEditDialog(context),
+                                      icon: const Icon(Icons.edit_outlined),
+                                      label: const Text('Редактировать'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: FilledButton.icon(
+                                      onPressed: () => _deleteEvent(context),
+                                      style: FilledButton.styleFrom(
+                                        backgroundColor: Colors.red,
+                                      ),
+                                      icon: const Icon(Icons.delete_outline),
+                                      label: const Text('Удалить'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                            ],
+
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: FilledButton(
+                                    onPressed: canJoin
+                                        ? () {
+                                            Navigator.of(context).pop();
+                                            showDialog(
+                                              context: context,
+                                              builder: (_) => EventRegistrationDialog(
+                                                eventId: eventId,
+                                                eventData: data,
+                                              ),
+                                            );
+                                          }
+                                        : null,
+                                    child: Text(
+                                      alreadyJoined
+                                          ? 'Ты участвуешь'
+                                          : isFull
+                                              ? 'Мест нет'
+                                              : recruitmentStatus == 'closed'
+                                                  ? 'Набор закрыт'
+                                                  : 'Участвовать',
+                                    ),
+                                  ),
+                                ),
+                                if (alreadyJoined && chatId.isNotEmpty) ...[
+                                  const SizedBox(width: 10),
+                                  FilledButton.icon(
+                                    onPressed: () {
+                                      Navigator.of(context).pop();
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) => EventChatScreen(
+                                            eventId: eventId,
+                                            chatId: chatId,
+                                            title: title,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                    icon: const Icon(Icons.chat_bubble_outline),
+                                    label: const Text('Чат'),
+                                  ),
+                                ],
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () => Navigator.of(context).pop(),
+                                    child: const Text('Закрыть'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            child: const Text('Закрыть'),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ],
                 ),
               ),
-            ),
-          ],
-        ),
-      ),
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -349,113 +1055,189 @@ class EventBigCard extends StatelessWidget {
     final title = (data['title'] ?? '').toString();
     final description = (data['description'] ?? '').toString();
     final imageUrl = (data['imageUrl'] ?? '').toString();
+    final city = (data['city'] ?? '').toString();
     final place = (data['place'] ?? '').toString();
     final startAt = data['startAt'] as Timestamp?;
+    final eventFormat = (data['eventFormat'] ?? 'offline').toString();
+    final recruitmentStatus = (data['recruitmentStatus'] ?? 'open').toString();
+    final capacity = (data['capacity'] is num) ? (data['capacity'] as num).toInt() : 0;
+
     final dateText = startAt == null
         ? 'Дата не указана'
         : DateFormat('dd.MM.yyyy • HH:mm').format(startAt.toDate());
 
-    return InkWell(
-      borderRadius: BorderRadius.circular(28),
-      onTap: () {
-        showDialog(
-          context: context,
-          builder: (_) => EventDetailsDialog(
-            eventId: eventId,
-            data: data,
-          ),
-        );
-      },
-      child: Container(
-        decoration: BoxDecoration(
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('events')
+          .doc(eventId)
+          .collection('registrations')
+          .snapshots(),
+      builder: (context, snap) {
+        final participantsCount = snap.data?.docs.length ?? 0;
+        final full = isEventFull(data, participantsCount);
+
+        return InkWell(
           borderRadius: BorderRadius.circular(28),
-          image: imageUrl.isNotEmpty
-              ? DecorationImage(
-                  image: NetworkImage(imageUrl),
-                  fit: BoxFit.cover,
-                )
-              : null,
-          gradient: imageUrl.isEmpty
-              ? const LinearGradient(
-                  colors: [
-                    Color(0xFFA8E932),
-                    Color(0xFFEAF7C7),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : null,
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x15000000),
-              blurRadius: 24,
-              offset: Offset(0, 10),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.black.withOpacity(0.08),
-                  Colors.black.withOpacity(0.48),
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
+          onTap: () {
+            showDialog(
+              context: context,
+              builder: (_) => EventDetailsDialog(
+                eventId: eventId,
+                data: data,
               ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.90),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    dateText,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF091633),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 90),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 28,
-                    height: 1.05,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                if (place.isNotEmpty)
-                  Text(
-                    '📍 $place',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                const SizedBox(height: 10),
-                Text(
-                  description,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    height: 1.45,
-                  ),
+            );
+          },
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              image: imageUrl.isNotEmpty
+                  ? DecorationImage(
+                      image: NetworkImage(imageUrl),
+                      fit: BoxFit.cover,
+                    )
+                  : null,
+              gradient: imageUrl.isEmpty
+                  ? const LinearGradient(
+                      colors: [Color(0xFFA8E932), Color(0xFFEAF7C7)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    )
+                  : null,
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x15000000),
+                  blurRadius: 24,
+                  offset: Offset(0, 10),
                 ),
               ],
             ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.black.withOpacity(0.08),
+                      Colors.black.withOpacity(0.48),
+                    ],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _eventGlassLabel(dateText),
+                        _eventGlassLabel(getEventFormatLabel(eventFormat)),
+                        _eventGlassLabel(
+                          getEventRecruitmentLabel(recruitmentStatus),
+                          textColor: getEventRecruitmentColor(recruitmentStatus),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 70),
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 28,
+                        height: 1.05,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        if (city.isNotEmpty)
+                          Text(
+                            '🏙 $city',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        if (place.isNotEmpty)
+                          Text(
+                            '📍 $place',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        height: 1.45,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Icon(
+                          full ? Icons.block : Icons.groups_2_outlined,
+                          size: 18,
+                          color: full ? Colors.red.shade300 : Colors.white,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          capacity > 0
+                              ? '$participantsCount / $capacity'
+                              : '$participantsCount участников',
+                          style: TextStyle(
+                            color: full ? Colors.red.shade300 : Colors.white,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        if (full) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            'Мест нет',
+                            style: TextStyle(
+                              color: Colors.red.shade300,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
+        );
+      },
+    );
+  }
+
+  Widget _eventGlassLabel(
+    String text, {
+    Color textColor = const Color(0xFF091633),
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.90),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontWeight: FontWeight.w700,
+          color: textColor,
         ),
       ),
     );
@@ -473,6 +1255,55 @@ class PublicProfileScreen extends StatelessWidget {
     required this.userId,
   });
 
+  Future<void> _reportUser(BuildContext context) async {
+    final me = FirebaseAuth.instance.currentUser;
+    if (me == null) return;
+
+    if (me.uid == userId) {
+      AppNotice.show(
+        context,
+        message: 'Нельзя пожаловаться на самого себя',
+        type: AppNoticeType.info,
+      );
+      return;
+    }
+
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (_) => const ReportDialog(
+        title: 'Пожаловаться на пользователя',
+      ),
+    );
+
+    if (reason == null || reason.trim().isEmpty) return;
+
+    try {
+      await FirebaseFirestore.instance.collection('reports').add({
+        'type': 'profile',
+        'reportedUserId': userId,
+        'reason': reason.trim(),
+        'createdBy': me.uid,
+        'createdByEmail': me.email ?? '',
+        'createdAt': FieldValue.serverTimestamp(),
+        'status': 'new',
+      });
+
+      if (!context.mounted) return;
+      AppNotice.show(
+        context,
+        message: 'Жалоба отправлена',
+        type: AppNoticeType.success,
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      AppNotice.show(
+        context,
+        message: 'Ошибка отправки жалобы: $e',
+        type: AppNoticeType.error,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final ref = FirebaseFirestore.instance.collection('users').doc(userId);
@@ -480,6 +1311,13 @@ class PublicProfileScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Профиль пользователя'),
+        actions: [
+          IconButton(
+            tooltip: 'Пожаловаться',
+            onPressed: () => _reportUser(context),
+            icon: const Icon(Icons.flag_outlined),
+          ),
+        ],
       ),
       body: SafeArea(
         child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
@@ -511,13 +1349,51 @@ class PublicProfileScreen extends StatelessWidget {
                 ? (data['ratingCount'] as num).toInt()
                 : 0;
 
+            final reviewCount = (data['reviewCount'] is num)
+                ? (data['reviewCount'] as num).toInt()
+                : 0;
+
             final createdRequestsCount = (data['createdRequestsCount'] is num)
                 ? (data['createdRequestsCount'] as num).toInt()
                 : 0;
 
-            final volunteerHelpsCount = (data['volunteerHelpsCount'] is num)
-                ? (data['volunteerHelpsCount'] as num).toInt()
+            final volunteerAcceptedCount = (data['volunteerAcceptedCount'] is num)
+                ? (data['volunteerAcceptedCount'] as num).toInt()
                 : 0;
+
+            final volunteerHelpsCompletedCount =
+                (data['volunteerHelpsCompletedCount'] is num)
+                    ? (data['volunteerHelpsCompletedCount'] as num).toInt()
+                    : ((data['volunteerHelpsCount'] is num)
+                        ? (data['volunteerHelpsCount'] as num).toInt()
+                        : 0);
+
+            final volunteerCancelledCount =
+                (data['volunteerCancelledCount'] is num)
+                    ? (data['volunteerCancelledCount'] as num).toInt()
+                    : 0;
+
+            final completedPercent = volunteerAcceptedCount <= 0
+                ? 0.0
+                : safePercent(
+                    volunteerHelpsCompletedCount,
+                    volunteerAcceptedCount,
+                  );
+
+            final cancelPercent = volunteerAcceptedCount <= 0
+                ? 0.0
+                : safePercent(
+                    volunteerCancelledCount,
+                    volunteerAcceptedCount,
+                  );
+
+            final rank = getVolunteerRank(
+              helpsCompleted: volunteerHelpsCompletedCount,
+              rating: rating,
+              ratingCount: ratingCount,
+            );
+
+            final rankColor = getVolunteerRankColor(rank);
 
             return ListView(
               padding: const EdgeInsets.all(16),
@@ -607,6 +1483,27 @@ class PublicProfileScreen extends StatelessWidget {
                               ),
                             ),
                           ],
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: rankColor.withOpacity(0.14),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: rankColor.withOpacity(0.30),
+                              ),
+                            ),
+                            child: Text(
+                              rank,
+                              style: TextStyle(
+                                color: rankColor,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
                           const SizedBox(height: 14),
                           Wrap(
                             spacing: 8,
@@ -622,17 +1519,50 @@ class PublicProfileScreen extends StatelessWidget {
                                 text: '$ratingCount оценок',
                               ),
                               _PublicProfileStatChip(
+                                icon: Icons.comment_outlined,
+                                text: '$reviewCount отзывов',
+                              ),
+                              _PublicProfileStatChip(
                                 icon: Icons.edit_note,
                                 text: '$createdRequestsCount заявок',
                               ),
                               _PublicProfileStatChip(
-                                icon: Icons.volunteer_activism_outlined,
-                                text: '$volunteerHelpsCount помощи',
+                                icon: Icons.task_alt,
+                                text: '$volunteerHelpsCompletedCount завершено',
+                              ),
+                              _PublicProfileStatChip(
+                                icon: Icons.close,
+                                text: '$volunteerCancelledCount отмен',
                               ),
                             ],
                           ),
                         ],
                       ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        _PublicProfileStatChip(
+                          icon: Icons.check_circle_outline,
+                          text:
+                              'Успешность ${completedPercent.toStringAsFixed(0)}%',
+                        ),
+                        _PublicProfileStatChip(
+                          icon: Icons.do_not_disturb_alt_outlined,
+                          text: 'Отмены ${cancelPercent.toStringAsFixed(0)}%',
+                        ),
+                        _PublicProfileStatChip(
+                          icon: Icons.handshake_outlined,
+                          text: '$volunteerAcceptedCount принял',
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -648,6 +1578,97 @@ class PublicProfileScreen extends StatelessWidget {
                     ),
                   ),
                 ],
+                const SizedBox(height: 14),
+                Text(
+                  'Отзывы',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                const SizedBox(height: 10),
+                StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(userId)
+                      .collection('reviews')
+                      .orderBy('createdAt', descending: true)
+                      .limit(20)
+                      .snapshots(),
+                  builder: (context, reviewsSnap) {
+                    if (!reviewsSnap.hasData) {
+                      return const Center(child: LeafSpinner(size: 26));
+                    }
+
+                    final docs = reviewsSnap.data!.docs;
+                    if (docs.isEmpty) {
+                      return const Card(
+                        child: Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Text('Пока нет отзывов'),
+                        ),
+                      );
+                    }
+
+                    return Column(
+                      children: docs.map((doc) {
+                        final review = doc.data();
+                        final ratingValue = (review['rating'] is num)
+                            ? (review['rating'] as num).toInt()
+                            : 5;
+                        final text = (review['review'] ?? '').toString();
+                        final fromUserId =
+                            (review['fromUserId'] ?? '').toString();
+                        final createdAt = review['createdAt'] as Timestamp?;
+
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          child: Padding(
+                            padding: const EdgeInsets.all(14),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    if (fromUserId.isNotEmpty)
+                                      UserMiniProfileButton(
+                                        userId: fromUserId,
+                                        compact: true,
+                                      ),
+                                    const Spacer(),
+                                    Text(
+                                      '$ratingValue ⭐',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                if (text.isNotEmpty) ...[
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    text,
+                                    style: const TextStyle(height: 1.45),
+                                  ),
+                                ],
+                                if (createdAt != null) ...[
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    DateFormat('dd.MM.yyyy HH:mm')
+                                        .format(createdAt.toDate()),
+                                    style: TextStyle(
+                                      color: Colors.black.withOpacity(0.58),
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    );
+                  },
+                ),
               ],
             );
           },
@@ -3717,6 +4738,7 @@ class _MainShellState extends State<MainShell> {
   int _index = 0;
   String _selectedCity = kAvailableCities.first;
   bool _cityLoaded = false;
+  String? _lastShownNotificationId;
 
   late final List<Widget> _pages = [
     const FeedScreen(),
@@ -3784,15 +4806,58 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
+  void _handleIncomingNotifications(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
+    if (docs.isEmpty) return;
+
+    final doc = docs.first;
+    if (_lastShownNotificationId == doc.id) return;
+
+    _lastShownNotificationId = doc.id;
+
+    final data = doc.data();
+    final text = (data['text'] ?? 'Новое системное уведомление').toString();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+
+      AppNotice.show(
+        context,
+        message: text,
+        type: AppNoticeType.info,
+        duration: const Duration(seconds: 3),
+      );
+
+      try {
+        await doc.reference.set({
+          'seen': true,
+          'seenAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      } catch (_) {}
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser!;
 
+    final chatsStream = FirebaseFirestore.instance
+        .collection('chats')
+        .where('members', arrayContains: user.uid)
+        .snapshots();
+
+    final notificationsStream = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('notifications')
+        .where('seen', isEqualTo: false)
+        .orderBy('createdAt', descending: true)
+        .limit(1)
+        .snapshots();
+
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('chats')
-          .where('members', arrayContains: user.uid)
-          .snapshots(),
+      stream: chatsStream,
       builder: (context, chatSnap) {
         int totalUnread = 0;
 
@@ -3800,89 +4865,135 @@ class _MainShellState extends State<MainShell> {
           totalUnread = getTotalUnreadFromChats(chatSnap.data!.docs, user.uid);
         }
 
-        return Scaffold(
-          appBar: AppBar(
-            title: Text(_titles[_index]),
-            actions: [
-              IconButton(
-                tooltip: 'Настройки',
-                onPressed: !_cityLoaded
-                    ? null
-                    : () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => SettingsScreen(
-                              isDarkMode: widget.settings.isDarkMode,
-                              onThemeChanged: (value) {
-                                widget.settings.setDarkMode(value);
-                              },
-                              selectedCity: _selectedCity,
-                              onCityChanged: (city) async {
-                                await _changeCity(city);
-                              },
+        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: notificationsStream,
+          builder: (context, notificationSnap) {
+            if (notificationSnap.hasData) {
+              _handleIncomingNotifications(notificationSnap.data!.docs);
+            }
+
+            return Scaffold(
+              appBar: AppBar(
+                title: Text(_titles[_index]),
+                actions: [
+                  IconButton(
+                    tooltip: 'Настройки',
+                    onPressed: !_cityLoaded
+                        ? null
+                        : () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => SettingsScreen(
+                                  isDarkMode: widget.settings.isDarkMode,
+                                  onThemeChanged: (value) {
+                                    widget.settings.setDarkMode(value);
+                                  },
+                                  selectedCity: _selectedCity,
+                                  onCityChanged: (city) async {
+                                    await _changeCity(city);
+                                  },
+                                ),
+                              ),
+                            );
+                          },
+                    icon: const Icon(Icons.settings_outlined),
+                  ),
+                ],
+              ),
+              body: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                child: IndexedStack(
+                  key: ValueKey(_index),
+                  index: _index,
+                  children: _pages,
+                ),
+              ),
+              bottomNavigationBar: NavigationBar(
+                selectedIndex: _index,
+                onDestinationSelected: (i) {
+                  setState(() => _index = i);
+                },
+                destinations: [
+                  const NavigationDestination(
+                    icon: Icon(Icons.dynamic_feed_outlined),
+                    selectedIcon: Icon(Icons.dynamic_feed),
+                    label: 'Лента',
+                  ),
+                  const NavigationDestination(
+                    icon: Icon(Icons.event_outlined),
+                    selectedIcon: Icon(Icons.event),
+                    label: 'Ивенты',
+                  ),
+                  const NavigationDestination(
+                    icon: Icon(Icons.add_circle_outline),
+                    selectedIcon: Icon(Icons.add_circle),
+                    label: 'Заявка',
+                  ),
+                  NavigationDestination(
+                    icon: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        const Icon(Icons.person_outline),
+                        if (totalUnread > 0)
+                          Positioned(
+                            right: -6,
+                            top: -6,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                totalUnread > 99 ? '99+' : '$totalUnread',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                             ),
                           ),
-                        );
-                      },
-                icon: const Icon(Icons.settings_outlined),
+                      ],
+                    ),
+                    selectedIcon: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        const Icon(Icons.person),
+                        if (totalUnread > 0)
+                          Positioned(
+                            right: -6,
+                            top: -6,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                totalUnread > 99 ? '99+' : '$totalUnread',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    label: 'Профиль',
+                  ),
+                ],
               ),
-            ],
-          ),
-          body: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
-            child: KeyedSubtree(
-              key: ValueKey(_index),
-              child: _pages[_index],
-            ),
-          ),
-          bottomNavigationBar: NavigationBar(
-            selectedIndex: _index,
-            onDestinationSelected: (i) => setState(() => _index = i),
-            destinations: [
-              const NavigationDestination(
-                icon: Icon(Icons.view_agenda_outlined),
-                selectedIcon: Icon(Icons.view_agenda),
-                label: 'Лента',
-              ),
-              const NavigationDestination(
-                icon: Icon(Icons.event_outlined),
-                selectedIcon: Icon(Icons.event),
-                label: 'Ивенты',
-              ),
-              const NavigationDestination(
-                icon: Icon(Icons.add_circle_outline),
-                selectedIcon: Icon(Icons.add_circle),
-                label: 'Заявка',
-              ),
-              NavigationDestination(
-                icon: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    const Icon(Icons.person_outline),
-                    if (totalUnread > 0)
-                      Positioned(
-                        right: -6,
-                        top: -4,
-                        child: _UnreadBadge(count: totalUnread),
-                      ),
-                  ],
-                ),
-                selectedIcon: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    const Icon(Icons.person),
-                    if (totalUnread > 0)
-                      Positioned(
-                        right: -6,
-                        top: -4,
-                        child: _UnreadBadge(count: totalUnread),
-                      ),
-                  ],
-                ),
-                label: 'Профиль',
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
@@ -3963,7 +5074,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
     return SafeArea(
       child: Padding(
-        padding: EdgeInsets.all(isMobile ? 12 : 16),
+        padding: EdgeInsets.fromLTRB(isMobile ? 10 : 16, isMobile ? 10 : 16, isMobile ? 10 : 16, isMobile ? 6 : 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -4191,7 +5302,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
                   return ListView.separated(
                     itemCount: docs.length,
-                    separatorBuilder: (_, __) => SizedBox(height: isMobile ? 10 : 12),
+                    separatorBuilder: (_, __) => SizedBox(height: isMobile ? 8 : 12),
                     itemBuilder: (context, i) {
                       final doc = docs[i];
                       final data = doc.data();
@@ -4289,6 +5400,8 @@ class _RequestDocCardState extends State<RequestDocCard> {
           .doc(widget.requestId);
 
       String finalChatId = '';
+      String ownerIdForNotification = '';
+      String helperNameForNotification = 'Волонтёр';
 
       await FirebaseFirestore.instance.runTransaction((tx) async {
         final requestSnap = await tx.get(requestRef);
@@ -4306,6 +5419,8 @@ class _RequestDocCardState extends State<RequestDocCard> {
         final acceptedHelpers =
             List<String>.from(requestData['acceptedHelpers'] ?? []);
         final existingChatId = (requestData['chatId'] ?? '').toString();
+
+        ownerIdForNotification = authorId;
 
         if (authorId == me.uid) {
           throw Exception('Нельзя откликнуться на свою заявку');
@@ -4346,16 +5461,19 @@ class _RequestDocCardState extends State<RequestDocCard> {
             'lastMessage': '',
             'lastMessageAt': FieldValue.serverTimestamp(),
             'unreadCountMap': {
-              authorId: 0,
+              authorId: 1,
               for (final uid in newAcceptedHelpers) uid: 0,
             },
           });
 
           final systemMsgRef = chatRef.collection('messages').doc();
           tx.set(systemMsgRef, {
-            'text': 'Чат создан. Опиши детали помощи здесь.',
+            'type': 'system',
+            'text': 'Волонтёр откликнулся на заявку. Можете обсудить детали здесь.',
             'senderId': 'system',
             'createdAt': FieldValue.serverTimestamp(),
+            'readBy': ['system'],
+            'deletedForAll': false,
           });
         } else {
           final chatRef = FirebaseFirestore.instance.collection('chats').doc(chatId);
@@ -4370,19 +5488,24 @@ class _RequestDocCardState extends State<RequestDocCard> {
           final unreadCountMap =
               Map<String, dynamic>.from(chatData['unreadCountMap'] ?? {});
           unreadCountMap[me.uid] = 0;
+          unreadCountMap[authorId] = FieldValue.increment(1);
 
           tx.set(chatRef, {
             'members': members,
-            'unreadCountMap': unreadCountMap,
             'lastMessage': 'Новый помощник присоединился к заявке.',
+            'lastMessageType': 'system',
             'lastMessageAt': FieldValue.serverTimestamp(),
+            'unreadCountMap': unreadCountMap,
           }, SetOptions(merge: true));
 
           final systemMsgRef = chatRef.collection('messages').doc();
           tx.set(systemMsgRef, {
+            'type': 'system',
             'text': 'Новый помощник присоединился к заявке.',
             'senderId': 'system',
             'createdAt': FieldValue.serverTimestamp(),
+            'readBy': ['system'],
+            'deletedForAll': false,
           });
         }
 
@@ -4398,6 +5521,35 @@ class _RequestDocCardState extends State<RequestDocCard> {
         finalChatId = chatId;
       });
 
+      try {
+        final meSnap = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(me.uid)
+            .get();
+
+        helperNameForNotification =
+            (meSnap.data()?['name'] ?? 'Волонтёр').toString().trim();
+
+        if (helperNameForNotification.isEmpty) {
+          helperNameForNotification = 'Волонтёр';
+        }
+      } catch (_) {}
+
+      if (ownerIdForNotification.isNotEmpty && ownerIdForNotification != me.uid) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(ownerIdForNotification)
+            .collection('notifications')
+            .add({
+          'type': 'helper_joined_request',
+          'text': '$helperNameForNotification откликнулся на твою заявку "${widget.title}"',
+          'requestId': widget.requestId,
+          'chatId': finalChatId,
+          'createdAt': FieldValue.serverTimestamp(),
+          'seen': false,
+        });
+      }
+
       if (!mounted) return;
 
       if (finalChatId.isEmpty) {
@@ -4408,6 +5560,11 @@ class _RequestDocCardState extends State<RequestDocCard> {
         );
         return;
       }
+
+      await FirebaseFirestore.instance.collection('users').doc(me.uid).set({
+        'volunteerAcceptedCount': FieldValue.increment(1),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
       Navigator.of(context).push(
         MaterialPageRoute(
@@ -4438,7 +5595,7 @@ class _RequestDocCardState extends State<RequestDocCard> {
 
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(isMobile ? 20 : 24),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -4446,23 +5603,23 @@ class _RequestDocCardState extends State<RequestDocCard> {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.18),
-            blurRadius: 18,
+            color: Colors.black.withOpacity(0.16),
+            blurRadius: isMobile ? 14 : 18,
             offset: const Offset(0, 8),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(isMobile ? 20 : 24),
         child: Stack(
           children: [
             Positioned(
-              right: -18,
-              bottom: -18,
+              right: isMobile ? -12 : -18,
+              bottom: isMobile ? -12 : -18,
               child: Icon(
                 visual.icon,
-                size: isMobile ? 100 : 132,
-                color: Colors.white.withOpacity(0.09),
+                size: isMobile ? 72 : 132,
+                color: Colors.white.withOpacity(isMobile ? 0.07 : 0.09),
               ),
             ),
             Positioned.fill(
@@ -4472,35 +5629,38 @@ class _RequestDocCardState extends State<RequestDocCard> {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      Colors.black.withOpacity(0.08),
-                      Colors.black.withOpacity(0.18),
-                      Colors.black.withOpacity(0.30),
+                      Colors.black.withOpacity(0.06),
+                      Colors.black.withOpacity(0.16),
+                      Colors.black.withOpacity(0.28),
                     ],
                   ),
                 ),
               ),
             ),
             Padding(
-              padding: EdgeInsets.all(isMobile ? 14 : 16),
+              padding: EdgeInsets.fromLTRB(isMobile ? 10 : 16, isMobile ? 10 : 16, isMobile ? 10 : 16, isMobile ? 6 : 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
                         child: UserMiniProfileButton(
                           userId: widget.authorId,
-                          compact: isMobile,
+                          compact: true,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      if (widget.urgent) const _UrgentGlassBadge(),
+                      if (widget.urgent) ...[
+                        const SizedBox(width: 6),
+                        const _UrgentGlassBadge(),
+                      ],
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  SizedBox(height: isMobile ? 8 : 10),
                   Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+                    spacing: isMobile ? 6 : 8,
+                    runSpacing: isMobile ? 6 : 8,
                     children: [
                       _GlassChip(
                         icon: Icons.category_outlined,
@@ -4513,17 +5673,17 @@ class _RequestDocCardState extends State<RequestDocCard> {
                       _GlassChip(
                         icon: Icons.groups_2_outlined,
                         text: stillNeeds
-                            ? 'Нужно ещё: ${widget.helpersNeeded - acceptedCount}'
-                            : 'Все набраны',
+                            ? 'Ещё: ${widget.helpersNeeded - acceptedCount}'
+                            : 'Набрано',
                       ),
                     ],
                   ),
                   if (widget.tags.isNotEmpty) ...[
-                    const SizedBox(height: 10),
+                    SizedBox(height: isMobile ? 8 : 10),
                     Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: widget.tags.take(3).map((tag) {
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: widget.tags.take(isMobile ? 2 : 3).map((tag) {
                         return _GlassChip(
                           icon: Icons.tag,
                           text: tag,
@@ -4531,33 +5691,33 @@ class _RequestDocCardState extends State<RequestDocCard> {
                       }).toList(),
                     ),
                   ],
-                  const SizedBox(height: 14),
+                  SizedBox(height: isMobile ? 10 : 14),
                   Text(
                     widget.title,
                     style: TextStyle(
-                      fontSize: isMobile ? 20 : 28,
+                      fontSize: isMobile ? 18 : 28,
                       fontWeight: FontWeight.w900,
-                      height: 1.0,
+                      height: 1.02,
                       color: Colors.white,
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  SizedBox(height: isMobile ? 8 : 10),
                   Text(
                     widget.description,
-                    maxLines: isMobile ? 2 : 3,
+                    maxLines: isMobile ? 3 : 3,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      height: 1.4,
+                      height: 1.35,
                       color: Colors.white.withOpacity(0.93),
-                      fontSize: isMobile ? 14 : 15,
+                      fontSize: isMobile ? 13.5 : 15,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  SizedBox(height: isMobile ? 10 : 12),
                   Row(
                     children: [
                       Icon(
                         Icons.hourglass_bottom_rounded,
-                        size: 18,
+                        size: isMobile ? 16 : 18,
                         color: Colors.white.withOpacity(0.78),
                       ),
                       const SizedBox(width: 6),
@@ -4566,11 +5726,12 @@ class _RequestDocCardState extends State<RequestDocCard> {
                         style: TextStyle(
                           color: Colors.white.withOpacity(0.78),
                           fontWeight: FontWeight.w700,
+                          fontSize: isMobile ? 12.5 : 14,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 14),
+                  SizedBox(height: isMobile ? 10 : 14),
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
@@ -4579,18 +5740,28 @@ class _RequestDocCardState extends State<RequestDocCard> {
                         backgroundColor: const Color(0xFF4E7F2F),
                         foregroundColor: Colors.white,
                         padding: EdgeInsets.symmetric(
-                          vertical: isMobile ? 14 : 16,
+                          vertical: isMobile ? 12 : 16,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(isMobile ? 14 : 18),
                         ),
                       ),
                       icon: _opening
                           ? const LeafSpinner(size: 18, color: Colors.white)
-                          : const Icon(Icons.favorite_border),
+                          : Icon(
+                              Icons.favorite_border,
+                              size: isMobile ? 18 : 20,
+                            ),
                       label: Text(
                         _opening
                             ? 'Открываю...'
                             : stillNeeds
                                 ? 'Помочь'
                                 : 'Набрано',
+                        style: TextStyle(
+                          fontSize: isMobile ? 14 : 16,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ),
@@ -4602,6 +5773,46 @@ class _RequestDocCardState extends State<RequestDocCard> {
       ),
     );
   }
+}
+
+
+String getVolunteerRank({
+  required int helpsCompleted,
+  required double rating,
+  required int ratingCount,
+}) {
+  if (helpsCompleted >= 25 && rating >= 4.8 && ratingCount >= 10) {
+    return 'Настоящий волонтёр';
+  }
+  if (helpsCompleted >= 12 && rating >= 4.5 && ratingCount >= 5) {
+    return 'Про';
+  }
+  if (helpsCompleted >= 4) {
+    return 'Активный волонтёр';
+  }
+  return 'Новичок';
+}
+
+Color getVolunteerRankColor(String rank) {
+  switch (rank) {
+    case 'Настоящий волонтёр':
+      return const Color(0xFF2E7D32);
+    case 'Про':
+      return const Color(0xFF1565C0);
+    case 'Активный волонтёр':
+      return const Color(0xFF6A1B9A);
+    default:
+      return const Color(0xFF6B7280);
+  }
+}
+
+double safePercent(int part, int total) {
+  if (total <= 0) return 0;
+  return (part / total) * 100;
+}
+
+String formatPercent(int part, int total) {
+  return '${safePercent(part, total).toStringAsFixed(0)}%';
 }
 
 
@@ -6371,6 +7582,10 @@ class EventsScreen extends StatefulWidget {
 
 class _EventsScreenState extends State<EventsScreen> {
   final _imageService = CloudinaryImageService();
+  final capacityCtrl = TextEditingController(text: '20');
+  String selectedEventFormat = 'offline';
+  String selectedRecruitmentStatus = 'open';
+  String selectedCity = kAvailableCities.first;
 
   Future<Map<String, dynamic>?> _loadRole() async {
     final user = FirebaseAuth.instance.currentUser;
@@ -6388,6 +7603,10 @@ class _EventsScreenState extends State<EventsScreen> {
     final titleCtrl = TextEditingController();
     final descCtrl = TextEditingController();
     final placeCtrl = TextEditingController();
+    final capacityCtrl = TextEditingController();
+    String selectedEventFormat = 'offline';
+    String selectedRecruitmentStatus = 'open';
+    String selectedCity = kAvailableCities.first;
 
     String imageUrl = '';
     bool imageUploading = false;
@@ -6446,6 +7665,63 @@ class _EventsScreenState extends State<EventsScreen> {
                     controller: descCtrl,
                     maxLines: 4,
                     decoration: const InputDecoration(labelText: 'Описание'),
+                  ),
+                  TextField(
+                    controller: capacityCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Лимит мест',
+                      hintText: 'Например 20',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  DropdownButtonFormField<String>(
+                    value: selectedEventFormat,
+                    decoration: const InputDecoration(labelText: 'Формат ивента'),
+                    items: kEventAttendanceFormats.map((v) {
+                      return DropdownMenuItem(
+                        value: v,
+                        child: Text(getEventFormatLabel(v)),
+                      );
+                    }).toList(),
+                    onChanged: (v) {
+                      if (v != null) setLocal(() => selectedEventFormat = v);
+                    },
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  DropdownButtonFormField<String>(
+                    value: selectedRecruitmentStatus,
+                    decoration: const InputDecoration(labelText: 'Статус набора'),
+                    items: kEventRecruitmentStatuses.map((v) {
+                      return DropdownMenuItem(
+                        value: v,
+                        child: Text(getEventRecruitmentLabel(v)),
+                      );
+                    }).toList(),
+                    onChanged: (v) {
+                      if (v != null) setLocal(() => selectedRecruitmentStatus = v);
+                    },
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  DropdownButtonFormField<String>(
+                    value: selectedCity,
+                    decoration: const InputDecoration(labelText: 'Город'),
+                    items: kAvailableCities.map((v) {
+                      return DropdownMenuItem(
+                        value: v,
+                        child: Text(v),
+                      );
+                    }).toList(),
+                    onChanged: (v) {
+                      if (v != null) setLocal(() => selectedCity = v);
+                    },
+                  ),
+                  const SizedBox(height: 12),
                   ),
                   const SizedBox(height: 12),
                   if (imageUrl.isNotEmpty)
@@ -6586,6 +7862,10 @@ class _EventsScreenState extends State<EventsScreen> {
       'createdBy': user.uid,
       'createdByRole': role,
       'createdAt': FieldValue.serverTimestamp(),
+      'capacity': int.tryParse(capacityCtrl.text.trim()) ?? 0,
+      'eventFormat': selectedEventFormat,
+      'recruitmentStatus': selectedRecruitmentStatus,
+      'city': selectedCity,
     });
 
     if (!context.mounted) return;
@@ -7143,9 +8423,23 @@ _RequestVisualConfig getRequestVisualConfig(String category) {
 
 
 
+class RatingDialogResult {
+  final int rating;
+  final String review;
+
+  const RatingDialogResult({
+    required this.rating,
+    required this.review,
+  });
+}
+
 class RatingDialog extends StatefulWidget {
   final String helperId;
-  const RatingDialog({super.key, required this.helperId});
+
+  const RatingDialog({
+    super.key,
+    required this.helperId,
+  });
 
   @override
   State<RatingDialog> createState() => _RatingDialogState();
@@ -7153,30 +8447,84 @@ class RatingDialog extends StatefulWidget {
 
 class _RatingDialogState extends State<RatingDialog> {
   int _rating = 5;
+  final _reviewCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _reviewCtrl.dispose();
+    super.dispose();
+  }
+
+  String get _hint {
+    switch (_rating) {
+      case 5:
+        return 'Отличная помощь';
+      case 4:
+        return 'Хорошая помощь';
+      case 3:
+        return 'Нормально';
+      case 2:
+        return 'Были проблемы';
+      default:
+        return 'Очень плохо';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Оценка помощи'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('Поставь оценку помощнику (1–5 ⭐)'),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            value: _rating,
-            items: List.generate(
-              5,
-              (i) => DropdownMenuItem(value: i + 1, child: Text('${i + 1} ⭐')),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Поставь оценку помощнику'),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int>(
+              value: _rating,
+              items: List.generate(
+                5,
+                (i) => DropdownMenuItem(
+                  value: i + 1,
+                  child: Text('${i + 1} ⭐'),
+                ),
+              ),
+              onChanged: (v) => setState(() => _rating = v ?? 5),
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+              ),
             ),
-            onChanged: (v) => setState(() => _rating = v ?? 5),
-            decoration: const InputDecoration(border: OutlineInputBorder()),
-          ),
-        ],
+            const SizedBox(height: 12),
+            TextField(
+              controller: _reviewCtrl,
+              minLines: 3,
+              maxLines: 5,
+              decoration: InputDecoration(
+                labelText: 'Отзыв',
+                hintText: _hint,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
-        FilledButton(onPressed: () => Navigator.pop(context, _rating), child: const Text('Оценить')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Отмена'),
+        ),
+        FilledButton(
+          onPressed: () {
+            Navigator.pop(
+              context,
+              RatingDialogResult(
+                rating: _rating,
+                review: _reviewCtrl.text.trim(),
+              ),
+            );
+          },
+          child: const Text('Сохранить'),
+        ),
       ],
     );
   }
@@ -7201,8 +8549,11 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final _msg = TextEditingController();
+  final _scroll = ScrollController();
+
   bool _sending = false;
   bool _markingRead = false;
+  bool _sendingLocation = false;
 
   @override
   void initState() {
@@ -7218,6 +8569,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _msg.dispose();
+    _scroll.dispose();
     super.dispose();
   }
 
@@ -7235,22 +8587,45 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (user == null) return;
 
     _markingRead = true;
+
     try {
-      await FirebaseFirestore.instance
-          .collection('chats')
-          .doc(widget.chatId)
-          .update({
-        'unreadCountMap.${user.uid}': 0,
-      });
+      final chatRef = FirebaseFirestore.instance.collection('chats').doc(widget.chatId);
+
+      await chatRef.set({
+        'unreadCountMap': {user.uid: 0},
+      }, SetOptions(merge: true));
+
+      final unreadMessages = await chatRef
+          .collection('messages')
+          .orderBy('createdAt', descending: true)
+          .limit(40)
+          .get();
+
+      final batch = FirebaseFirestore.instance.batch();
+
+      for (final doc in unreadMessages.docs) {
+        final data = doc.data();
+        final senderId = (data['senderId'] ?? '').toString();
+        final deletedForAll = data['deletedForAll'] == true;
+        final readBy = List<String>.from(data['readBy'] ?? []);
+
+        if (deletedForAll) continue;
+        if (senderId.isEmpty || senderId == user.uid) continue;
+        if (readBy.contains(user.uid)) continue;
+
+        batch.set(doc.reference, {
+          'readBy': FieldValue.arrayUnion([user.uid]),
+        }, SetOptions(merge: true));
+      }
+
+      await batch.commit();
     } catch (_) {
       try {
         await FirebaseFirestore.instance
             .collection('chats')
             .doc(widget.chatId)
             .set({
-          'unreadCountMap': {
-            user.uid: 0,
-          },
+          'unreadCountMap': {user.uid: 0},
         }, SetOptions(merge: true));
       } catch (_) {}
     } finally {
@@ -7258,7 +8633,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _send(String requestStatus) async {
+  Future<void> _sendText({
+    required String requestStatus,
+  }) async {
     if (requestStatus != 'in_chat' && requestStatus != 'open') {
       AppNotice.show(
         context,
@@ -7284,22 +8661,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       final chatData = chatSnap.data() ?? {};
       final members = List<String>.from(chatData['members'] ?? []);
 
-      String? otherUserId;
-      for (final id in members) {
-        if (id != user.uid) {
-          otherUserId = id;
-          break;
-        }
-      }
-
       await chatRef.collection('messages').add({
+        'type': 'text',
         'text': text,
         'senderId': user.uid,
         'createdAt': FieldValue.serverTimestamp(),
+        'readBy': [user.uid],
+        'deletedForAll': false,
       }).timeout(const Duration(seconds: 10));
 
       final updateData = <String, dynamic>{
         'lastMessage': text,
+        'lastMessageType': 'text',
         'lastMessageAt': FieldValue.serverTimestamp(),
         'unreadCountMap.${user.uid}': 0,
       };
@@ -7310,7 +8683,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         }
       }
 
-      await chatRef.update(updateData).timeout(const Duration(seconds: 10));
+      await chatRef.set(updateData, SetOptions(merge: true)).timeout(const Duration(seconds: 10));
 
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'chatMessagesCount': FieldValue.increment(1),
@@ -7328,6 +8701,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       }
 
       await _markChatAsRead();
+      _scrollToBottomSoon();
     } catch (e) {
       if (!mounted) return;
       AppNotice.show(
@@ -7338,6 +8712,164 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     } finally {
       if (mounted) setState(() => _sending = false);
     }
+  }
+
+  Future<void> _sendLocation({
+    required String requestStatus,
+  }) async {
+    if (_sendingLocation) return;
+
+    if (requestStatus != 'in_chat' && requestStatus != 'open') {
+      AppNotice.show(
+        context,
+        message: 'Заявка уже закрыта. Чат только для чтения',
+        type: AppNoticeType.info,
+      );
+      return;
+    }
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    setState(() => _sendingLocation = true);
+
+    try {
+      final location = await AppLocationService().getCurrentLocationWithCity();
+
+      if (!location.ok || location.lat == null || location.lng == null) {
+        if (!mounted) return;
+        AppNotice.show(
+          context,
+          message: location.error ?? 'Не удалось получить геолокацию',
+          type: AppNoticeType.error,
+        );
+        return;
+      }
+
+      final chatRef = FirebaseFirestore.instance.collection('chats').doc(widget.chatId);
+      final chatSnap = await chatRef.get();
+      final chatData = chatSnap.data() ?? {};
+      final members = List<String>.from(chatData['members'] ?? []);
+
+      final cityText = (location.city ?? 'Неизвестно').trim();
+      final previewText = cityText.isEmpty ? 'Геолокация' : 'Геолокация: $cityText';
+
+      await chatRef.collection('messages').add({
+        'type': 'location',
+        'text': previewText,
+        'senderId': user.uid,
+        'createdAt': FieldValue.serverTimestamp(),
+        'readBy': [user.uid],
+        'deletedForAll': false,
+        'lat': location.lat,
+        'lng': location.lng,
+        'city': cityText,
+      });
+
+      final updateData = <String, dynamic>{
+        'lastMessage': '📍 $previewText',
+        'lastMessageType': 'location',
+        'lastMessageAt': FieldValue.serverTimestamp(),
+        'unreadCountMap.${user.uid}': 0,
+      };
+
+      for (final memberId in members) {
+        if (memberId != user.uid) {
+          updateData['unreadCountMap.$memberId'] = FieldValue.increment(1);
+        }
+      }
+
+      await chatRef.set(updateData, SetOptions(merge: true));
+
+      if (!mounted) return;
+      AppNotice.show(
+        context,
+        message: 'Геолокация отправлена',
+        type: AppNoticeType.success,
+      );
+
+      await _markChatAsRead();
+      _scrollToBottomSoon();
+    } catch (e) {
+      if (!mounted) return;
+      AppNotice.show(
+        context,
+        message: 'Ошибка отправки геолокации: $e',
+        type: AppNoticeType.error,
+      );
+    } finally {
+      if (mounted) setState(() => _sendingLocation = false);
+    }
+  }
+
+  Future<void> _deleteMessage({
+    required String messageId,
+  }) async {
+    try {
+      final ref = FirebaseFirestore.instance
+          .collection('chats')
+          .doc(widget.chatId)
+          .collection('messages')
+          .doc(messageId);
+
+      await ref.set({
+        'deletedForAll': true,
+        'deletedAt': FieldValue.serverTimestamp(),
+        'text': '',
+        'type': 'deleted',
+      }, SetOptions(merge: true));
+
+      if (!mounted) return;
+      AppNotice.show(
+        context,
+        message: 'Сообщение удалено',
+        type: AppNoticeType.success,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      AppNotice.show(
+        context,
+        message: 'Ошибка удаления: $e',
+        type: AppNoticeType.error,
+      );
+    }
+  }
+
+  Future<void> _confirmDeleteMessage({
+    required String messageId,
+  }) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Удалить сообщение?'),
+        content: const Text('Сообщение исчезнет у всех участников чата.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok == true) {
+      await _deleteMessage(messageId: messageId);
+    }
+  }
+
+  void _scrollToBottomSoon() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scroll.hasClients) return;
+      _scroll.animateTo(
+        _scroll.position.maxScrollExtent + 120,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    });
   }
 
   Future<void> _reportChat({
@@ -7454,83 +8986,79 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   if (readOnly)
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                      color: Colors.orange.withOpacity(0.14),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      color: const Color(0xFFFFF3CD),
                       child: const Text(
                         'Заявка закрыта. Чат доступен только для чтения.',
-                        style: TextStyle(fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF7A5C00),
+                        ),
                       ),
                     ),
+
+                  if (!readOnly &&
+                      myId != null &&
+                      myId != (requestData['authorId'] ?? '').toString() &&
+                      List<String>.from(requestData['acceptedHelpers'] ?? []).contains(myId))
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: () => cancelAcceptedRequestByVolunteer(
+                          context: context,
+                          requestId: requestId,
+                        ),
+                        icon: const Icon(Icons.exit_to_app),
+                        label: const Text('Отказаться от заявки'),
+                      ),
+                    ),
+
                   Expanded(
                     child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                       stream: messagesQuery.snapshots(),
                       builder: (context, snap) {
-                        if (snap.connectionState == ConnectionState.waiting) {
-                          return const Center(child: LeafSpinner(size: 28));
+                        if (!snap.hasData) {
+                          return const Center(child: LeafSpinner(size: 30));
                         }
 
-                        if (!snap.hasData || snap.data!.docs.isEmpty) {
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            _markChatAsRead();
-                          });
-                          return const Center(child: Text('Пока нет сообщений'));
-                        }
+                        final docs = snap.data!.docs;
 
                         WidgetsBinding.instance.addPostFrameCallback((_) {
                           _markChatAsRead();
                         });
 
-                        final docs = snap.data!.docs;
-                        final dark = Theme.of(context).brightness == Brightness.dark;
+                        if (docs.isEmpty) {
+                          return const Center(
+                            child: Text('Сообщений пока нет'),
+                          );
+                        }
 
                         return ListView.builder(
-                          padding: const EdgeInsets.all(12),
+                          controller: _scroll,
+                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
                           itemCount: docs.length,
                           itemBuilder: (context, i) {
-                            final data = docs[i].data();
-                            final text = (data['text'] ?? '').toString();
+                            final doc = docs[i];
+                            final data = doc.data();
+
                             final senderId = (data['senderId'] ?? '').toString();
-                            final isMe = senderId == myId;
-                            final isSystem = senderId == 'system';
+                            final isMine = senderId == myId;
+                            final type = (data['type'] ?? 'text').toString();
+                            final deletedForAll = data['deletedForAll'] == true;
 
-                            final bubbleColor = isSystem
-                                ? (dark
-                                    ? Colors.white.withOpacity(0.08)
-                                    : Colors.black.withOpacity(0.06))
-                                : isMe
-                                    ? const Color(0xFF7ED957).withOpacity(dark ? 0.22 : 0.18)
-                                    : (dark
-                                        ? Colors.white.withOpacity(0.08)
-                                        : Colors.black.withOpacity(0.06));
-
-                            final textColor = dark
-                                ? Colors.white.withOpacity(0.94)
-                                : Colors.black.withOpacity(0.88);
-
-                            return Align(
-                              alignment: isSystem
-                                  ? Alignment.center
-                                  : isMe
-                                      ? Alignment.centerRight
-                                      : Alignment.centerLeft,
-                              child: Container(
-                                margin: const EdgeInsets.symmetric(vertical: 4),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 10,
-                                ),
-                                constraints: const BoxConstraints(maxWidth: 320),
-                                decoration: BoxDecoration(
-                                  color: bubbleColor,
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: Text(
-                                  text,
-                                  style: TextStyle(color: textColor),
-                                ),
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: _ChatMessageTile(
+                                messageId: doc.id,
+                                data: data,
+                                isMine: isMine,
+                                isGroupChat: members.length > 2,
+                                otherMemberIds: members.where((e) => e != myId).toList(),
+                                onDelete: deletedForAll || !isMine || senderId == 'system'
+                                    ? null
+                                    : () => _confirmDeleteMessage(messageId: doc.id),
                               ),
                             );
                           },
@@ -7544,27 +9072,37 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
                       child: Row(
                         children: [
+                          IconButton(
+                            tooltip: 'Отправить геолокацию',
+                            onPressed: (readOnly || _sendingLocation || _sending)
+                                ? null
+                                : () => _sendLocation(requestStatus: requestStatus),
+                            icon: _sendingLocation
+                                ? const LeafSpinner(size: 20)
+                                : const Icon(Icons.location_on_outlined),
+                          ),
                           Expanded(
                             child: TextField(
                               controller: _msg,
-                              enabled: !readOnly,
+                              minLines: 1,
+                              maxLines: 5,
+                              enabled: !readOnly && !_sending,
+                              onSubmitted: (_) => _sendText(requestStatus: requestStatus),
                               decoration: InputDecoration(
                                 hintText: readOnly
-                                    ? 'Чат закрыт для отправки'
-                                    : 'Сообщение...',
-                                border: const OutlineInputBorder(),
+                                    ? 'Чат закрыт'
+                                    : 'Напиши сообщение...',
                               ),
-                              onSubmitted: (_) => _send(requestStatus),
                             ),
                           ),
-                          const SizedBox(width: 10),
+                          const SizedBox(width: 8),
                           FilledButton(
-                            onPressed: (_sending || readOnly)
+                            onPressed: (readOnly || _sending || _sendingLocation)
                                 ? null
-                                : () => _send(requestStatus),
+                                : () => _sendText(requestStatus: requestStatus),
                             child: _sending
                                 ? const LeafSpinner(size: 18, color: Colors.white)
-                                : const Icon(Icons.send),
+                                : const Icon(Icons.send_rounded),
                           ),
                         ],
                       ),
@@ -7579,6 +9117,360 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
   }
 }
+
+
+const List<String> kEventAttendanceFormats = [
+  'offline',
+  'online',
+];
+
+const List<String> kEventRecruitmentStatuses = [
+  'open',
+  'in_progress',
+  'closed',
+];
+
+String getEventFormatLabel(String value) {
+  switch (value) {
+    case 'online':
+      return 'Онлайн';
+    case 'offline':
+      return 'Офлайн';
+    default:
+      return 'Не указано';
+  }
+}
+
+String getEventRecruitmentLabel(String value) {
+  switch (value) {
+    case 'open':
+      return 'Набор открыт';
+    case 'in_progress':
+      return 'В процессе';
+    case 'closed':
+      return 'Набор закрыт';
+    default:
+      return 'Не указано';
+  }
+}
+
+Color getEventRecruitmentColor(String value) {
+  switch (value) {
+    case 'open':
+      return const Color(0xFF2E7D32);
+    case 'in_progress':
+      return const Color(0xFFF57C00);
+    case 'closed':
+      return Colors.red;
+    default:
+      return const Color(0xFF6B7280);
+  }
+}
+
+bool isEventFull(Map<String, dynamic> data, int participantsCount) {
+  final capacity = (data['capacity'] is num) ? (data['capacity'] as num).toInt() : 0;
+  if (capacity <= 0) return false;
+  return participantsCount >= capacity;
+}
+
+Future<int> getEventParticipantsCount(String eventId) async {
+  final snap = await FirebaseFirestore.instance
+      .collection('events')
+      .doc(eventId)
+      .collection('registrations')
+      .get();
+
+  return snap.docs.length;
+}
+
+Future<String> ensureEventChat({
+  required String eventId,
+  required Map<String, dynamic> eventData,
+  required String joinedUserId,
+}) async {
+  final db = FirebaseFirestore.instance;
+  final eventRef = db.collection('events').doc(eventId);
+  final eventSnap = await eventRef.get();
+  final freshData = eventSnap.data() ?? eventData;
+
+  String chatId = (freshData['chatId'] ?? '').toString();
+  final createdBy = (freshData['createdBy'] ?? '').toString();
+
+  if (chatId.isEmpty) {
+    final chatRef = db.collection('event_chats').doc();
+    chatId = chatRef.id;
+
+    await chatRef.set({
+      'chatId': chatId,
+      'eventId': eventId,
+      'eventTitle': (freshData['title'] ?? '').toString(),
+      'createdBy': createdBy,
+      'members': [if (createdBy.isNotEmpty) createdBy, joinedUserId].toSet().toList(),
+      'createdAt': FieldValue.serverTimestamp(),
+      'lastMessage': 'Чат ивента создан',
+      'lastMessageType': 'system',
+      'lastMessageAt': FieldValue.serverTimestamp(),
+    });
+
+    await chatRef.collection('messages').add({
+      'type': 'system',
+      'text': 'Чат ивента создан. Здесь могут общаться все участники.',
+      'senderId': 'system',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    await eventRef.set({
+      'chatId': chatId,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  } else {
+    await db.collection('event_chats').doc(chatId).set({
+      'members': FieldValue.arrayUnion([joinedUserId]),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  return chatId;
+}
+
+
+class _ChatMessageTile extends StatelessWidget {
+  final String messageId;
+  final Map<String, dynamic> data;
+  final bool isMine;
+  final bool isGroupChat;
+  final List<String> otherMemberIds;
+  final VoidCallback? onDelete;
+
+  const _ChatMessageTile({
+    required this.messageId,
+    required this.data,
+    required this.isMine,
+    required this.isGroupChat,
+    required this.otherMemberIds,
+    required this.onDelete,
+  });
+
+  String _formatTime(Timestamp? ts) {
+    if (ts == null) return '';
+    return DateFormat('HH:mm').format(ts.toDate());
+  }
+
+  bool _isReadByAllOthers() {
+    if (!isMine) return false;
+    if (otherMemberIds.isEmpty) return false;
+
+    final readBy = List<String>.from(data['readBy'] ?? []);
+    for (final uid in otherMemberIds) {
+      if (!readBy.contains(uid)) return false;
+    }
+    return true;
+  }
+
+  Future<void> _openLocation() async {
+    final lat = (data['lat'] is num) ? (data['lat'] as num).toDouble() : null;
+    final lng = (data['lng'] is num) ? (data['lng'] as num).toDouble() : null;
+
+    if (lat == null || lng == null) return;
+
+    final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final senderId = (data['senderId'] ?? '').toString();
+    final text = (data['text'] ?? '').toString();
+    final type = (data['type'] ?? 'text').toString();
+    final deletedForAll = data['deletedForAll'] == true;
+    final ts = data['createdAt'] as Timestamp?;
+    final city = (data['city'] ?? '').toString();
+
+    final bubbleColor = senderId == 'system'
+        ? const Color(0xFFE8EEF8)
+        : isMine
+            ? const Color(0xFFA8E932)
+            : const Color(0xFF1E2A4A);
+
+    final textColor = senderId == 'system'
+        ? const Color(0xFF24324A)
+        : isMine
+            ? Colors.black
+            : Colors.white;
+
+    final align = senderId == 'system'
+        ? Alignment.center
+        : isMine
+            ? Alignment.centerRight
+            : Alignment.centerLeft;
+
+    final readText = _isReadByAllOthers() ? 'Прочитано' : 'Отправлено';
+
+    Widget content;
+
+    if (deletedForAll || type == 'deleted') {
+      content = Text(
+        'Сообщение удалено',
+        style: TextStyle(
+          color: textColor.withOpacity(0.75),
+          fontStyle: FontStyle.italic,
+        ),
+      );
+    } else if (senderId == 'system') {
+      content = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.info_outline, size: 16, color: Color(0xFF24324A)),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              text,
+              style: const TextStyle(
+                color: Color(0xFF24324A),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      );
+    } else if (type == 'location') {
+      content = InkWell(
+        onTap: _openLocation,
+        borderRadius: BorderRadius.circular(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.location_on,
+                  size: 18,
+                  color: textColor,
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    city.isEmpty ? 'Геолокация' : 'Геолокация: $city',
+                    style: TextStyle(
+                      color: textColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: isMine
+                    ? Colors.white.withOpacity(0.42)
+                    : Colors.white.withOpacity(0.10),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Text(
+                'Нажми, чтобы открыть на карте',
+                style: TextStyle(
+                  color: textColor,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    } else {
+      content = Text(
+        text,
+        style: TextStyle(
+          color: textColor,
+          height: 1.45,
+        ),
+      );
+    }
+
+    return Align(
+      alignment: align,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 320),
+        child: Column(
+          crossAxisAlignment: senderId == 'system'
+              ? CrossAxisAlignment.center
+              : isMine
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: bubbleColor,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  content,
+                  if (senderId != 'system') ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _formatTime(ts),
+                          style: TextStyle(
+                            color: textColor.withOpacity(0.72),
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        if (isMine && !deletedForAll) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            readText,
+                            style: TextStyle(
+                              color: textColor.withOpacity(0.72),
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      _formatTime(ts),
+                      style: const TextStyle(
+                        color: Color(0xFF5F6B7A),
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ]
+                ],
+              ),
+            ),
+            if (onDelete != null) ...[
+              const SizedBox(height: 4),
+              GestureDetector(
+                onTap: onDelete,
+                child: Text(
+                  'Удалить',
+                  style: TextStyle(
+                    color: Colors.red.shade400,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 
 
 class ReportDialog extends StatefulWidget {
@@ -7633,12 +9525,15 @@ Future<void> closeRequestAndRateHelper({
   required String requestId,
   required String helperId,
 }) async {
-  final rating = await showDialog<int>(
+  final result = await showDialog<RatingDialogResult>(
     context: context,
     builder: (_) => RatingDialog(helperId: helperId),
   );
 
-  if (rating == null) return;
+  if (result == null) return;
+
+  final me = FirebaseAuth.instance.currentUser;
+  if (me == null) return;
 
   final db = FirebaseFirestore.instance;
   final requestRef = db.collection('requests').doc(requestId);
@@ -7646,7 +9541,7 @@ Future<void> closeRequestAndRateHelper({
 
   int newCount = 0;
   double newRating = 5.0;
-  int newHelpsCount = 0;
+  int newHelpsCompleted = 0;
 
   try {
     await db.runTransaction((tx) async {
@@ -7667,32 +9562,98 @@ Future<void> closeRequestAndRateHelper({
         throw Exception('Оценка уже была поставлена');
       }
 
+      final acceptedHelpers = List<String>.from(requestData['acceptedHelpers'] ?? []);
+      if (!acceptedHelpers.contains(helperId)) {
+        throw Exception('Этот пользователь не является активным помощником');
+      }
+
       final helperData = helperSnap.data() ?? <String, dynamic>{};
 
-      final oldRating =
-          (helperData['rating'] is num) ? (helperData['rating'] as num).toDouble() : 5.0;
-      final oldCount =
-          (helperData['ratingCount'] is num) ? (helperData['ratingCount'] as num).toInt() : 0;
-      final oldHelpsCount =
-          (helperData['volunteerHelpsCount'] is num) ? (helperData['volunteerHelpsCount'] as num).toInt() : 0;
+      final oldRating = (helperData['rating'] is num)
+          ? (helperData['rating'] as num).toDouble()
+          : 5.0;
+
+      final oldCount = (helperData['ratingCount'] is num)
+          ? (helperData['ratingCount'] as num).toInt()
+          : 0;
+
+      final oldHelpsCompleted = (helperData['volunteerHelpsCompletedCount'] is num)
+          ? (helperData['volunteerHelpsCompletedCount'] as num).toInt()
+          : 0;
+
+      final oldAccepted = (helperData['volunteerAcceptedCount'] is num)
+          ? (helperData['volunteerAcceptedCount'] as num).toInt()
+          : 0;
+
+      final oldCancelled = (helperData['volunteerCancelledCount'] is num)
+          ? (helperData['volunteerCancelledCount'] as num).toInt()
+          : 0;
+
+      final recentRatingsQuery = await db
+          .collection('users')
+          .doc(helperId)
+          .collection('reviews')
+          .where('fromUserId', isEqualTo: me.uid)
+          .where(
+            'createdAt',
+            isGreaterThan: Timestamp.fromDate(
+              DateTime.now().subtract(const Duration(hours: 1)),
+            ),
+          )
+          .get();
+
+      if (recentRatingsQuery.docs.length >= 10) {
+        throw Exception('Нельзя оценить одного и того же человека больше 10 раз за 1 час');
+      }
 
       newCount = oldCount + 1;
-      newRating = ((oldRating * oldCount) + rating) / newCount;
-      newHelpsCount = oldHelpsCount + 1;
+      newRating = ((oldRating * oldCount) + result.rating) / newCount;
+      newHelpsCompleted = oldHelpsCompleted + 1;
 
-      tx.update(helperRef, {
+      final totalVolunteerActions = oldAccepted;
+      final completedPercent = totalVolunteerActions <= 0
+          ? 0.0
+          : (newHelpsCompleted / totalVolunteerActions) * 100.0;
+
+      final cancelPercent = totalVolunteerActions <= 0
+          ? 0.0
+          : (oldCancelled / totalVolunteerActions) * 100.0;
+
+      tx.set(helperRef, {
         'rating': newRating,
         'ratingCount': newCount,
-        'volunteerHelpsCount': newHelpsCount,
+        'reviewCount': FieldValue.increment(1),
+        'volunteerHelpsCount': newHelpsCompleted,
+        'volunteerHelpsCompletedCount': newHelpsCompleted,
+        'volunteerCompletedPercent': completedPercent,
+        'volunteerCancelPercent': cancelPercent,
         'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      final reviewRef = db
+          .collection('users')
+          .doc(helperId)
+          .collection('reviews')
+          .doc();
+
+      tx.set(reviewRef, {
+        'requestId': requestId,
+        'toUserId': helperId,
+        'fromUserId': me.uid,
+        'fromUserEmail': me.email ?? '',
+        'rating': result.rating,
+        'review': result.review,
+        'createdAt': FieldValue.serverTimestamp(),
       });
 
-      tx.update(requestRef, {
+      tx.set(requestRef, {
         'status': 'done',
         'helperRated': true,
-        'helperRating': rating,
+        'helperRating': result.rating,
+        'helperReview': result.review,
+        'completedHelperId': helperId,
         'closedAt': FieldValue.serverTimestamp(),
-      });
+      }, SetOptions(merge: true));
     });
 
     final achievementMessages = <String>[];
@@ -7706,15 +9667,15 @@ Future<void> closeRequestAndRateHelper({
     achievementMessages.addAll(
       await AchievementService().checkAfterVolunteerHelpCountForUser(
         userId: helperId,
-        helpsCount: newHelpsCount,
+        helpsCount: newHelpsCompleted,
       ),
     );
 
     if (!context.mounted) return;
 
     final text = achievementMessages.isEmpty
-        ? 'Заявка завершена, оценка сохранена'
-        : 'Заявка завершена, оценка сохранена\n${achievementMessages.join('\n')}';
+        ? 'Заявка завершена, оценка и отзыв сохранены'
+        : 'Заявка завершена, оценка и отзыв сохранены\n${achievementMessages.join('\n')}';
 
     AppNotice.show(
       context,
@@ -7726,6 +9687,133 @@ Future<void> closeRequestAndRateHelper({
     AppNotice.show(
       context,
       message: 'Ошибка завершения: $e',
+      type: AppNoticeType.error,
+    );
+  }
+}
+
+
+Future<void> cancelAcceptedRequestByVolunteer({
+  required BuildContext context,
+  required String requestId,
+}) async {
+  final me = FirebaseAuth.instance.currentUser;
+  if (me == null) return;
+
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (_) => AlertDialog(
+      title: const Text('Отказаться от заявки?'),
+      content: const Text(
+        'Ты снимешь с себя ответственность по этой заявке. Это повлияет на статистику отмен.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Назад'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Отказаться'),
+        ),
+      ],
+    ),
+  );
+
+  if (ok != true) return;
+
+  final db = FirebaseFirestore.instance;
+  final requestRef = db.collection('requests').doc(requestId);
+  final userRef = db.collection('users').doc(me.uid);
+
+  try {
+    await db.runTransaction((tx) async {
+      final requestSnap = await tx.get(requestRef);
+      final userSnap = await tx.get(userRef);
+
+      if (!requestSnap.exists) {
+        throw Exception('Заявка не найдена');
+      }
+
+      final requestData = requestSnap.data() as Map<String, dynamic>;
+      final acceptedHelpers = List<String>.from(requestData['acceptedHelpers'] ?? []);
+      final status = (requestData['status'] ?? '').toString();
+      final authorId = (requestData['authorId'] ?? '').toString();
+      final chatId = (requestData['chatId'] ?? '').toString();
+
+      if (status == 'done' || status == 'cancelled' || status == 'expired') {
+        throw Exception('Эта заявка уже закрыта');
+      }
+
+      if (!acceptedHelpers.contains(me.uid)) {
+        throw Exception('Ты не принят в эту заявку');
+      }
+
+      acceptedHelpers.remove(me.uid);
+
+      final userData = userSnap.data() ?? <String, dynamic>{};
+      final oldAccepted = (userData['volunteerAcceptedCount'] is num)
+          ? (userData['volunteerAcceptedCount'] as num).toInt()
+          : 0;
+      final oldCompleted = (userData['volunteerHelpsCompletedCount'] is num)
+          ? (userData['volunteerHelpsCompletedCount'] as num).toInt()
+          : 0;
+      final oldCancelled = (userData['volunteerCancelledCount'] is num)
+          ? (userData['volunteerCancelledCount'] as num).toInt()
+          : 0;
+
+      final newCancelled = oldCancelled + 1;
+      final completedPercent = oldAccepted <= 0 ? 0.0 : (oldCompleted / oldAccepted) * 100.0;
+      final cancelPercent = oldAccepted <= 0 ? 0.0 : (newCancelled / oldAccepted) * 100.0;
+
+      tx.set(userRef, {
+        'volunteerCancelledCount': newCancelled,
+        'volunteerCancelPercent': cancelPercent,
+        'volunteerCompletedPercent': completedPercent,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      tx.set(requestRef, {
+        'acceptedHelpers': acceptedHelpers,
+        'acceptedHelpersCount': acceptedHelpers.length,
+        'status': acceptedHelpers.isEmpty ? 'open' : 'in_chat',
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      if (chatId.isNotEmpty) {
+        final chatRef = db.collection('chats').doc(chatId);
+        tx.set(chatRef, {
+          'members': FieldValue.arrayRemove([me.uid]),
+          'lastMessage': 'Волонтёр отказался от заявки.',
+          'lastMessageType': 'system',
+          'lastMessageAt': FieldValue.serverTimestamp(),
+          'unreadCountMap.$me.uid': 0,
+          'unreadCountMap.$authorId': FieldValue.increment(1),
+        }, SetOptions(merge: true));
+
+        final systemMessageRef = chatRef.collection('messages').doc();
+        tx.set(systemMessageRef, {
+          'type': 'system',
+          'text': 'Волонтёр отказался от заявки.',
+          'senderId': 'system',
+          'createdAt': FieldValue.serverTimestamp(),
+          'readBy': ['system'],
+          'deletedForAll': false,
+        });
+      }
+    });
+
+    if (!context.mounted) return;
+    AppNotice.show(
+      context,
+      message: 'Ты отказался от заявки',
+      type: AppNoticeType.info,
+    );
+  } catch (e) {
+    if (!context.mounted) return;
+    AppNotice.show(
+      context,
+      message: 'Ошибка отмены: $e',
       type: AppNoticeType.error,
     );
   }
