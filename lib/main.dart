@@ -172,16 +172,9 @@ class _EventRegistrationDialogState extends State<EventRegistrationDialog> {
       }, SetOptions(merge: true));
 
       if (!mounted) return;
-
       Navigator.of(context).pop();
 
-      AppNotice.show(
-        context,
-        message: 'Ты зарегистрирован на ивент',
-        type: AppNoticeType.success,
-      );
-
-      await Future.delayed(const Duration(milliseconds: 150));
+      await Future.delayed(const Duration(milliseconds: 120));
       if (!mounted) return;
 
       Navigator.of(context).push(
@@ -292,7 +285,8 @@ class _EventRegistrationDialogState extends State<EventRegistrationDialog> {
                 decoration: InputDecoration(
                   labelText: 'Университет',
                   labelStyle: TextStyle(color: subColor),
-                  prefixIcon: Icon(Icons.account_balance_outlined, color: iconColor),
+                  prefixIcon:
+                      Icon(Icons.account_balance_outlined, color: iconColor),
                 ),
               ),
               const SizedBox(height: 12),
@@ -339,6 +333,7 @@ class EventChatScreen extends StatefulWidget {
 class _EventChatScreenState extends State<EventChatScreen> {
   final _msg = TextEditingController();
   bool _sending = false;
+  bool _leaving = false;
 
   @override
   void dispose() {
@@ -386,20 +381,85 @@ class _EventChatScreenState extends State<EventChatScreen> {
     }
   }
 
+  Future<void> _leaveEvent() async {
+    if (_leaving) return;
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Выйти с ивента?'),
+        content: const Text('Ты выйдешь из списка участников и потеряешь доступ к чату ивента.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Выйти'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true) return;
+
+    setState(() => _leaving = true);
+
+    try {
+      final db = FirebaseFirestore.instance;
+
+      await db
+          .collection('events')
+          .doc(widget.eventId)
+          .collection('registrations')
+          .doc(user.uid)
+          .delete();
+
+      await db.collection('event_chats').doc(widget.chatId).set({
+        'members': FieldValue.arrayRemove([user.uid]),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      await db.collection('event_chats').doc(widget.chatId).collection('messages').add({
+        'type': 'system',
+        'text': 'Один из участников покинул ивент',
+        'senderId': 'system',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      if (!mounted) return;
+      Navigator.of(context).pop();
+
+      AppNotice.show(
+        context,
+        message: 'Ты вышел с ивента',
+        type: AppNoticeType.success,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      AppNotice.show(
+        context,
+        message: 'Ошибка выхода: $e',
+        type: AppNoticeType.error,
+      );
+    } finally {
+      if (mounted) setState(() => _leaving = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final myId = FirebaseAuth.instance.currentUser?.uid;
 
-    final registrationStream = FirebaseFirestore.instance
+    final regStream = FirebaseFirestore.instance
         .collection('events')
         .doc(widget.eventId)
         .collection('registrations')
         .doc(myId)
-        .snapshots();
-
-    final chatStream = FirebaseFirestore.instance
-        .collection('event_chats')
-        .doc(widget.chatId)
         .snapshots();
 
     final messagesStream = FirebaseFirestore.instance
@@ -410,61 +470,43 @@ class _EventChatScreenState extends State<EventChatScreen> {
         .snapshots();
 
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: registrationStream,
+      stream: regStream,
       builder: (context, regSnap) {
         final isRegistered = regSnap.data?.exists == true;
 
         return Scaffold(
           appBar: AppBar(
             title: Text('Чат: ${widget.title}'),
+            actions: [
+              if (isRegistered)
+                TextButton.icon(
+                  onPressed: _leaving ? null : _leaveEvent,
+                  icon: _leaving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.logout, size: 18),
+                  label: const Text('Выйти'),
+                ),
+            ],
           ),
           body: Column(
             children: [
-              StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                stream: chatStream,
-                builder: (context, chatSnap) {
-                  final chatData = chatSnap.data?.data() ?? {};
-                  final members =
-                      List<String>.from(chatData['members'] ?? const <String>[]);
-
-                  return Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFA8E932).withOpacity(0.16),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            'Участников: ${members.length}',
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                        if (!isRegistered)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                            decoration: BoxDecoration(
-                              color: Colors.red.withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: const Text(
-                              'Ты не зарегистрирован',
-                              style: TextStyle(
-                                color: Colors.red,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                      ],
+              if (!isRegistered)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  color: Colors.red.withOpacity(0.10),
+                  child: const Text(
+                    'Ты не зарегистрирован на этот ивент. Чат только для участников.',
+                    style: TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.w700,
                     ),
-                  );
-                },
-              ),
+                  ),
+                ),
               Expanded(
                 child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                   stream: messagesStream,
@@ -661,6 +703,65 @@ class EventDetailsDialog extends StatelessWidget {
       AppNotice.show(
         context,
         message: 'Ошибка удаления: $e',
+        type: AppNoticeType.error,
+      );
+    }
+  }
+
+  Future<void> _leaveEvent(BuildContext context, String chatId) async {
+    final me = FirebaseAuth.instance.currentUser;
+    if (me == null) return;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Выйти с ивента?'),
+        content: const Text('Ты выйдешь из списка участников и потеряешь доступ к чату.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Выйти'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true) return;
+
+    try {
+      final db = FirebaseFirestore.instance;
+
+      await db
+          .collection('events')
+          .doc(eventId)
+          .collection('registrations')
+          .doc(me.uid)
+          .delete();
+
+      if (chatId.isNotEmpty) {
+        await db.collection('event_chats').doc(chatId).set({
+          'members': FieldValue.arrayRemove([me.uid]),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+
+      if (!context.mounted) return;
+      Navigator.of(context).pop();
+
+      AppNotice.show(
+        context,
+        message: 'Ты вышел с ивента',
+        type: AppNoticeType.success,
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      AppNotice.show(
+        context,
+        message: 'Ошибка выхода: $e',
         type: AppNoticeType.error,
       );
     }
@@ -1226,6 +1327,12 @@ class EventDetailsDialog extends StatelessWidget {
                                     icon: const Icon(Icons.chat_bubble_outline),
                                     label: const Text('Чат'),
                                   ),
+                                  const SizedBox(width: 10),
+                                  OutlinedButton.icon(
+                                    onPressed: () => _leaveEvent(context, chatId),
+                                    icon: const Icon(Icons.logout),
+                                    label: const Text('Выйти'),
+                                  ),
                                 ],
                                 const SizedBox(width: 10),
                                 Expanded(
@@ -1263,6 +1370,9 @@ class EventBigCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final me = FirebaseAuth.instance.currentUser;
+    final myId = me?.uid ?? '';
+
     final title = (data['title'] ?? '').toString();
     final description = (data['description'] ?? '').toString();
     final imageUrl = (data['imageUrl'] ?? '').toString();
@@ -1284,8 +1394,12 @@ class EventBigCard extends StatelessWidget {
           .collection('registrations')
           .snapshots(),
       builder: (context, snap) {
-        final participantsCount = snap.data?.docs.length ?? 0;
+        final regs = snap.data?.docs ?? [];
+        final participantsCount = regs.length;
         final full = isEventFull(data, participantsCount);
+        final alreadyJoined = myId.isNotEmpty && regs.any((doc) => doc.id == myId);
+        final chatId = (data['chatId'] ?? '').toString();
+        final canOpenChat = alreadyJoined && chatId.isNotEmpty;
 
         return InkWell(
           borderRadius: BorderRadius.circular(28),
@@ -1422,6 +1536,47 @@ class EventBigCard extends StatelessWidget {
                             ),
                           ),
                         ],
+                        const Spacer(),
+                        if (canOpenChat)
+                          Material(
+                            color: Colors.white.withOpacity(0.18),
+                            borderRadius: BorderRadius.circular(999),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(999),
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => EventChatScreen(
+                                      eventId: eventId,
+                                      chatId: chatId,
+                                      title: title,
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: const Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.chat_bubble_outline,
+                                      color: Colors.white,
+                                      size: 18,
+                                    ),
+                                    SizedBox(width: 6),
+                                    Text(
+                                      'Чат',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ],
@@ -5695,18 +5850,14 @@ class _RequestDocCardState extends State<RequestDocCard> {
             'requestCategory': widget.category,
             'members': [authorId, ...newAcceptedHelpers],
             'createdAt': FieldValue.serverTimestamp(),
-            'lastMessage': '',
+            'updatedAt': FieldValue.serverTimestamp(),
+            'lastMessage': 'Чат создан',
             'lastMessageAt': FieldValue.serverTimestamp(),
-            'unreadCountMap': {
-              authorId: 1,
-              for (final uid in newAcceptedHelpers) uid: 0,
-            },
           });
 
-          final systemMsgRef = chatRef.collection('messages').doc();
-          tx.set(systemMsgRef, {
-            'type': 'system',
-            'text': 'Волонтёр откликнулся на заявку. Можете обсудить детали здесь.',
+          final systemMessageRef = chatRef.collection('messages').doc();
+          tx.set(systemMessageRef, {
+            'text': 'Чат по заявке создан',
             'senderId': 'system',
             'createdAt': FieldValue.serverTimestamp(),
             'readBy': ['system'],
@@ -5714,36 +5865,10 @@ class _RequestDocCardState extends State<RequestDocCard> {
           });
         } else {
           final chatRef = FirebaseFirestore.instance.collection('chats').doc(chatId);
-          final chatSnap = await tx.get(chatRef);
-          final chatData = chatSnap.data() ?? {};
-
-          final members = List<String>.from(chatData['members'] ?? []);
-          if (!members.contains(me.uid)) {
-            members.add(me.uid);
-          }
-
-          final unreadCountMap =
-              Map<String, dynamic>.from(chatData['unreadCountMap'] ?? {});
-          unreadCountMap[me.uid] = 0;
-          unreadCountMap[authorId] = FieldValue.increment(1);
-
           tx.set(chatRef, {
-            'members': members,
-            'lastMessage': 'Новый помощник присоединился к заявке.',
-            'lastMessageType': 'system',
-            'lastMessageAt': FieldValue.serverTimestamp(),
-            'unreadCountMap': unreadCountMap,
+            'members': FieldValue.arrayUnion([me.uid]),
+            'updatedAt': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
-
-          final systemMsgRef = chatRef.collection('messages').doc();
-          tx.set(systemMsgRef, {
-            'type': 'system',
-            'text': 'Новый помощник присоединился к заявке.',
-            'senderId': 'system',
-            'createdAt': FieldValue.serverTimestamp(),
-            'readBy': ['system'],
-            'deletedForAll': false,
-          });
         }
 
         tx.set(requestRef, {
