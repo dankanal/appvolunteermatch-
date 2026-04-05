@@ -87,6 +87,7 @@ class _EventRegistrationDialogState extends State<EventRegistrationDialog> {
   final _universityCtrl = TextEditingController();
 
   bool _busy = false;
+  String _educationType = 'school';
 
   @override
   void dispose() {
@@ -103,17 +104,11 @@ class _EventRegistrationDialogState extends State<EventRegistrationDialog> {
     final askFullName = widget.eventData['askFullName'] == true;
     final askSchool = widget.eventData['askSchool'] == true;
     final askUniversity = widget.eventData['askUniversity'] == true;
-    final recruitmentStatus =
-        (widget.eventData['recruitmentStatus'] ?? 'open').toString();
 
-    if (recruitmentStatus == 'closed') {
-      AppNotice.show(
-        context,
-        message: 'Набор на ивент закрыт',
-        type: AppNoticeType.error,
-      );
-      return;
-    }
+    final needEducationChoice = askSchool && askUniversity;
+    final needSchool = askSchool && (!needEducationChoice || _educationType == 'school');
+    final needUniversity =
+        askUniversity && (!needEducationChoice || _educationType == 'university');
 
     if (askFullName && _fullNameCtrl.text.trim().isEmpty) {
       AppNotice.show(
@@ -124,7 +119,7 @@ class _EventRegistrationDialogState extends State<EventRegistrationDialog> {
       return;
     }
 
-    if (askSchool && _schoolCtrl.text.trim().isEmpty) {
+    if (needSchool && _schoolCtrl.text.trim().isEmpty) {
       AppNotice.show(
         context,
         message: 'Заполни школу',
@@ -133,7 +128,7 @@ class _EventRegistrationDialogState extends State<EventRegistrationDialog> {
       return;
     }
 
-    if (askUniversity && _universityCtrl.text.trim().isEmpty) {
+    if (needUniversity && _universityCtrl.text.trim().isEmpty) {
       AppNotice.show(
         context,
         message: 'Заполни университет',
@@ -145,34 +140,23 @@ class _EventRegistrationDialogState extends State<EventRegistrationDialog> {
     setState(() => _busy = true);
 
     try {
-      final eventRef =
-          FirebaseFirestore.instance.collection('events').doc(widget.eventId);
+      final db = FirebaseFirestore.instance;
 
-      final participantsSnap = await eventRef.collection('registrations').get();
-      final participantsCount = participantsSnap.docs.length;
-      final capacity = (widget.eventData['capacity'] is num)
-          ? (widget.eventData['capacity'] as num).toInt()
-          : 0;
-
-      if (capacity > 0 && participantsCount >= capacity) {
-        AppNotice.show(
-          context,
-          message: 'Свободных мест больше нет',
-          type: AppNoticeType.error,
-        );
-        return;
-      }
-
-      final regRef = eventRef.collection('registrations').doc(user.uid);
+      final regRef = db
+          .collection('events')
+          .doc(widget.eventId)
+          .collection('registrations')
+          .doc(user.uid);
 
       await regRef.set({
         'userId': user.uid,
         'email': user.email ?? '',
         'fullName': _fullNameCtrl.text.trim(),
-        'school': _schoolCtrl.text.trim(),
-        'university': _universityCtrl.text.trim(),
-        'eventCity': (widget.eventData['city'] ?? '').toString(),
-        'eventFormat': (widget.eventData['eventFormat'] ?? 'offline').toString(),
+        'educationType': needEducationChoice
+            ? _educationType
+            : (askUniversity ? 'university' : (askSchool ? 'school' : '')),
+        'school': needSchool ? _schoolCtrl.text.trim() : '',
+        'university': needUniversity ? _universityCtrl.text.trim() : '',
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -182,31 +166,32 @@ class _EventRegistrationDialogState extends State<EventRegistrationDialog> {
         joinedUserId: user.uid,
       );
 
-      await FirebaseFirestore.instance.collection('event_chats').doc(chatId).set({
-        'members': FieldValue.arrayUnion([user.uid]),
-        'lastMessage': 'Новый участник зарегистрировался на ивент',
-        'lastMessageType': 'system',
-        'lastMessageAt': FieldValue.serverTimestamp(),
+      await db.collection('events').doc(widget.eventId).set({
+        'chatId': chatId,
+        'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
-      await FirebaseFirestore.instance
-          .collection('event_chats')
-          .doc(chatId)
-          .collection('messages')
-          .add({
-        'type': 'system',
-        'text': 'Новый участник зарегистрировался на ивент.',
-        'senderId': 'system',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
       if (!mounted) return;
+
       Navigator.of(context).pop();
 
       AppNotice.show(
         context,
         message: 'Ты зарегистрирован на ивент',
         type: AppNoticeType.success,
+      );
+
+      await Future.delayed(const Duration(milliseconds: 150));
+      if (!mounted) return;
+
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => EventChatScreen(
+            eventId: widget.eventId,
+            chatId: chatId,
+            title: (widget.eventData['title'] ?? 'Чат ивента').toString(),
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -225,9 +210,21 @@ class _EventRegistrationDialogState extends State<EventRegistrationDialog> {
     final askFullName = widget.eventData['askFullName'] == true;
     final askSchool = widget.eventData['askSchool'] == true;
     final askUniversity = widget.eventData['askUniversity'] == true;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : const Color(0xFF111827);
+    final iconColor = isDark ? Colors.white : const Color(0xFF2563EB);
+    final subColor = isDark ? Colors.white70 : const Color(0xFF6B7280);
+
+    final needEducationChoice = askSchool && askUniversity;
+    final showSchool = askSchool && (!needEducationChoice || _educationType == 'school');
+    final showUniversity =
+        askUniversity && (!needEducationChoice || _educationType == 'university');
 
     return AlertDialog(
-      title: const Text('Регистрация на ивент'),
+      title: Text(
+        'Регистрация на ивент',
+        style: TextStyle(color: textColor),
+      ),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -235,21 +232,68 @@ class _EventRegistrationDialogState extends State<EventRegistrationDialog> {
             if (askFullName) ...[
               TextField(
                 controller: _fullNameCtrl,
-                decoration: const InputDecoration(labelText: 'Имя и фамилия'),
+                style: TextStyle(color: textColor),
+                decoration: InputDecoration(
+                  labelText: 'Имя и фамилия',
+                  labelStyle: TextStyle(color: subColor),
+                  prefixIcon: Icon(Icons.person_outline, color: iconColor),
+                ),
               ),
               const SizedBox(height: 12),
             ],
-            if (askSchool) ...[
+            if (needEducationChoice) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Где ты учишься?',
+                  style: TextStyle(
+                    color: textColor,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment<String>(
+                    value: 'school',
+                    icon: Icon(Icons.school_outlined),
+                    label: Text('Школа'),
+                  ),
+                  ButtonSegment<String>(
+                    value: 'university',
+                    icon: Icon(Icons.account_balance_outlined),
+                    label: Text('Университет'),
+                  ),
+                ],
+                selected: {_educationType},
+                onSelectionChanged: (values) {
+                  setState(() => _educationType = values.first);
+                },
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (showSchool) ...[
               TextField(
                 controller: _schoolCtrl,
-                decoration: const InputDecoration(labelText: 'Школа'),
+                style: TextStyle(color: textColor),
+                decoration: InputDecoration(
+                  labelText: 'Школа',
+                  labelStyle: TextStyle(color: subColor),
+                  prefixIcon: Icon(Icons.school_outlined, color: iconColor),
+                ),
               ),
               const SizedBox(height: 12),
             ],
-            if (askUniversity) ...[
+            if (showUniversity) ...[
               TextField(
                 controller: _universityCtrl,
-                decoration: const InputDecoration(labelText: 'Университет'),
+                style: TextStyle(color: textColor),
+                decoration: InputDecoration(
+                  labelText: 'Университет',
+                  labelStyle: TextStyle(color: subColor),
+                  prefixIcon: Icon(Icons.account_balance_outlined, color: iconColor),
+                ),
               ),
               const SizedBox(height: 12),
             ],
@@ -259,7 +303,10 @@ class _EventRegistrationDialogState extends State<EventRegistrationDialog> {
       actions: [
         TextButton(
           onPressed: _busy ? null : () => Navigator.of(context).pop(),
-          child: const Text('Выйти'),
+          child: Text(
+            'Выйти',
+            style: TextStyle(color: isDark ? Colors.white : null),
+          ),
         ),
         FilledButton(
           onPressed: _busy ? null : _submit,
@@ -323,6 +370,7 @@ class _EventChatScreenState extends State<EventChatScreen> {
         'lastMessage': text,
         'lastMessageType': 'text',
         'lastMessageAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
       _msg.clear();
@@ -340,6 +388,20 @@ class _EventChatScreenState extends State<EventChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final myId = FirebaseAuth.instance.currentUser?.uid;
+
+    final registrationStream = FirebaseFirestore.instance
+        .collection('events')
+        .doc(widget.eventId)
+        .collection('registrations')
+        .doc(myId)
+        .snapshots();
+
+    final chatStream = FirebaseFirestore.instance
+        .collection('event_chats')
+        .doc(widget.chatId)
+        .snapshots();
+
     final messagesStream = FirebaseFirestore.instance
         .collection('event_chats')
         .doc(widget.chatId)
@@ -347,106 +409,161 @@ class _EventChatScreenState extends State<EventChatScreen> {
         .orderBy('createdAt')
         .snapshots();
 
-    final myId = FirebaseAuth.instance.currentUser?.uid;
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: registrationStream,
+      builder: (context, regSnap) {
+        final isRegistered = regSnap.data?.exists == true;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Чат: ${widget.title}'),
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: messagesStream,
-              builder: (context, snap) {
-                if (!snap.hasData) {
-                  return const Center(child: LeafSpinner(size: 28));
-                }
+        return Scaffold(
+          appBar: AppBar(
+            title: Text('Чат: ${widget.title}'),
+          ),
+          body: Column(
+            children: [
+              StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                stream: chatStream,
+                builder: (context, chatSnap) {
+                  final chatData = chatSnap.data?.data() ?? {};
+                  final members =
+                      List<String>.from(chatData['members'] ?? const <String>[]);
 
-                final docs = snap.data!.docs;
-
-                if (docs.isEmpty) {
-                  return const Center(
-                    child: Text('Сообщений пока нет'),
-                  );
-                }
-
-                return ListView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: docs.length,
-                  itemBuilder: (context, i) {
-                    final data = docs[i].data();
-                    final senderId = (data['senderId'] ?? '').toString();
-                    final text = (data['text'] ?? '').toString();
-                    final isSystem = senderId == 'system';
-                    final isMine = senderId == myId;
-
-                    return Align(
-                      alignment: isSystem
-                          ? Alignment.center
-                          : isMine
-                              ? Alignment.centerRight
-                              : Alignment.centerLeft,
-                      child: Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
-                        ),
-                        constraints: const BoxConstraints(maxWidth: 320),
-                        decoration: BoxDecoration(
-                          color: isSystem
-                              ? const Color(0xFFE8EEF8)
-                              : isMine
-                                  ? const Color(0xFFA8E932)
-                                  : const Color(0xFF1E2A4A),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Text(
-                          text,
-                          style: TextStyle(
-                            color: isSystem
-                                ? const Color(0xFF24324A)
-                                : isMine
-                                    ? Colors.black
-                                    : Colors.white,
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFA8E932).withOpacity(0.16),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            'Участников: ${members.length}',
+                            style: const TextStyle(fontWeight: FontWeight.w700),
                           ),
                         ),
-                      ),
+                        if (!isRegistered)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: const Text(
+                              'Ты не зарегистрирован',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+              Expanded(
+                child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: messagesStream,
+                  builder: (context, snap) {
+                    if (!snap.hasData) {
+                      return const Center(child: LeafSpinner(size: 28));
+                    }
+
+                    final docs = snap.data!.docs;
+
+                    if (docs.isEmpty) {
+                      return const Center(
+                        child: Text('Сообщений пока нет'),
+                      );
+                    }
+
+                    return ListView.builder(
+                      padding: const EdgeInsets.all(12),
+                      itemCount: docs.length,
+                      itemBuilder: (context, i) {
+                        final data = docs[i].data();
+                        final senderId = (data['senderId'] ?? '').toString();
+                        final text = (data['text'] ?? '').toString();
+                        final isSystem = senderId == 'system';
+                        final isMine = senderId == myId;
+
+                        return Align(
+                          alignment: isSystem
+                              ? Alignment.center
+                              : isMine
+                                  ? Alignment.centerRight
+                                  : Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
+                            constraints: const BoxConstraints(maxWidth: 320),
+                            decoration: BoxDecoration(
+                              color: isSystem
+                                  ? const Color(0xFFE8EEF8)
+                                  : isMine
+                                      ? const Color(0xFFA8E932)
+                                      : const Color(0xFF1E2A4A),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Text(
+                              text,
+                              style: TextStyle(
+                                color: isSystem
+                                    ? const Color(0xFF24324A)
+                                    : isMine
+                                        ? Colors.black
+                                        : Colors.white,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     );
                   },
-                );
-              },
-            ),
-          ),
-          SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _msg,
-                      decoration: const InputDecoration(
-                        hintText: 'Сообщение в чат ивента...',
-                      ),
-                      onSubmitted: (_) => _send(),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: _sending ? null : _send,
-                    child: _sending
-                        ? const LeafSpinner(size: 18, color: Colors.white)
-                        : const Icon(Icons.send),
-                  ),
-                ],
+                ),
               ),
-            ),
+              SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _msg,
+                          enabled: isRegistered && !_sending,
+                          decoration: InputDecoration(
+                            hintText: isRegistered
+                                ? 'Сообщение в чат ивента...'
+                                : 'Сначала зарегистрируйся на ивент',
+                          ),
+                          onSubmitted: (_) {
+                            if (isRegistered) _send();
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed: (isRegistered && !_sending) ? _send : null,
+                        child: _sending
+                            ? const LeafSpinner(size: 18, color: Colors.white)
+                            : const Icon(Icons.send),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -744,8 +861,7 @@ class EventDetailsDialog extends StatelessWidget {
                   ),
                   CheckboxListTile(
                     value: askUniversity,
-                    onChanged: (v) =>
-                        setLocal(() => askUniversity = v ?? false),
+                    onChanged: (v) => setLocal(() => askUniversity = v ?? false),
                     title: const Text('Спрашивать университет'),
                     contentPadding: EdgeInsets.zero,
                   ),
@@ -875,7 +991,7 @@ class EventDetailsDialog extends StatelessWidget {
       future: _loadViewerInfo(),
       builder: (context, viewerSnap) {
         final viewerRole = (viewerSnap.data?['role'] ?? 'user').toString();
-        final isAdmin = viewerRole == 'admin';
+        final isAdmin = viewerRole == 'admin' || viewerRole == 'moderator';
 
         return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
           stream: FirebaseFirestore.instance
@@ -980,8 +1096,7 @@ class EventDetailsDialog extends StatelessWidget {
                                       : '$participantsCount участников',
                                   style: TextStyle(
                                     fontWeight: FontWeight.w800,
-                                    color:
-                                        isFull ? Colors.red : Colors.black87,
+                                    color: isFull ? Colors.red : Colors.black87,
                                   ),
                                 ),
                                 if (isFull) ...[
@@ -1041,7 +1156,7 @@ class EventDetailsDialog extends StatelessWidget {
                               style: const TextStyle(height: 1.5),
                             ),
                             const SizedBox(height: 20),
-                            if (isOwner) ...[
+                            if (isOwner || isAdmin) ...[
                               Row(
                                 children: [
                                   Expanded(
@@ -1075,8 +1190,7 @@ class EventDetailsDialog extends StatelessWidget {
                                             Navigator.of(context).pop();
                                             showDialog(
                                               context: context,
-                                              builder: (_) =>
-                                                  EventRegistrationDialog(
+                                              builder: (_) => EventRegistrationDialog(
                                                 eventId: eventId,
                                                 eventData: data,
                                               ),
@@ -1109,9 +1223,7 @@ class EventDetailsDialog extends StatelessWidget {
                                         ),
                                       );
                                     },
-                                    icon: const Icon(
-                                      Icons.chat_bubble_outline,
-                                    ),
+                                    icon: const Icon(Icons.chat_bubble_outline),
                                     label: const Text('Чат'),
                                   ),
                                 ],
@@ -1407,6 +1519,12 @@ class PublicProfileScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final ref = FirebaseFirestore.instance.collection('users').doc(userId);
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final mainText = isDark ? Colors.white : Colors.black;
+    final subText = isDark ? Colors.white70 : Colors.black87;
+    final cardBg = isDark ? const Color(0xFF16201A) : Colors.white;
+    final softCard = isDark ? Colors.white.withOpacity(0.10) : Colors.transparent;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Профиль пользователя'),
@@ -1526,9 +1644,7 @@ class PublicProfileScreen extends StatelessWidget {
                                 ],
                               )
                             : null,
-                        color: backgroundUrl.isEmpty
-                            ? Colors.white
-                            : Colors.transparent,
+                        color: backgroundUrl.isEmpty ? cardBg : Colors.transparent,
                       ),
                       child: Column(
                         children: [
@@ -1551,15 +1667,15 @@ class PublicProfileScreen extends StatelessWidget {
                             decoration: BoxDecoration(
                               color: backgroundUrl.isNotEmpty
                                   ? Colors.white.withOpacity(0.78)
-                                  : Colors.transparent,
+                                  : softCard,
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
                               name,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 22,
                                 fontWeight: FontWeight.w800,
-                                color: Colors.black,
+                                color: mainText,
                               ),
                             ),
                           ),
@@ -1573,12 +1689,12 @@ class PublicProfileScreen extends StatelessWidget {
                               decoration: BoxDecoration(
                                 color: backgroundUrl.isNotEmpty
                                     ? Colors.white.withOpacity(0.68)
-                                    : Colors.transparent,
+                                    : softCard,
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Text(
                                 email,
-                                style: const TextStyle(color: Colors.black87),
+                                style: TextStyle(color: subText),
                               ),
                             ),
                           ],
@@ -1672,7 +1788,10 @@ class PublicProfileScreen extends StatelessWidget {
                       padding: const EdgeInsets.all(16),
                       child: Text(
                         bio,
-                        style: const TextStyle(height: 1.45),
+                        style: TextStyle(
+                          height: 1.45,
+                          color: mainText,
+                        ),
                       ),
                     ),
                   ),
@@ -1682,6 +1801,7 @@ class PublicProfileScreen extends StatelessWidget {
                   'Отзывы',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w800,
+                        color: mainText,
                       ),
                 ),
                 const SizedBox(height: 10),
@@ -1700,10 +1820,13 @@ class PublicProfileScreen extends StatelessWidget {
 
                     final docs = reviewsSnap.data!.docs;
                     if (docs.isEmpty) {
-                      return const Card(
+                      return Card(
                         child: Padding(
-                          padding: EdgeInsets.all(16),
-                          child: Text('Пока нет отзывов'),
+                          padding: const EdgeInsets.all(16),
+                          child: Text(
+                            'Пока нет отзывов',
+                            style: TextStyle(color: mainText),
+                          ),
                         ),
                       );
                     }
@@ -1736,8 +1859,9 @@ class PublicProfileScreen extends StatelessWidget {
                                     const Spacer(),
                                     Text(
                                       '$ratingValue ⭐',
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontWeight: FontWeight.w800,
+                                        color: mainText,
                                       ),
                                     ),
                                   ],
@@ -1746,7 +1870,10 @@ class PublicProfileScreen extends StatelessWidget {
                                   const SizedBox(height: 10),
                                   Text(
                                     text,
-                                    style: const TextStyle(height: 1.45),
+                                    style: TextStyle(
+                                      height: 1.45,
+                                      color: mainText,
+                                    ),
                                   ),
                                 ],
                                 if (createdAt != null) ...[
@@ -1755,7 +1882,7 @@ class PublicProfileScreen extends StatelessWidget {
                                     DateFormat('dd.MM.yyyy HH:mm')
                                         .format(createdAt.toDate()),
                                     style: TextStyle(
-                                      color: Colors.black.withOpacity(0.58),
+                                      color: subText,
                                       fontSize: 12,
                                     ),
                                   ),
@@ -1798,6 +1925,7 @@ class UserMiniProfileButton extends StatelessWidget {
         final data = snap.data?.data() ?? {};
         final name = (data['name'] ?? 'Без имени').toString();
         final avatarUrl = (data['avatarUrl'] ?? '').toString();
+        final isDark = Theme.of(context).brightness == Brightness.dark;
 
         return InkWell(
           borderRadius: BorderRadius.circular(999),
@@ -1814,7 +1942,9 @@ class UserMiniProfileButton extends StatelessWidget {
               vertical: compact ? 6 : 8,
             ),
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.05),
+              color: isDark
+                  ? Colors.white.withOpacity(0.08)
+                  : Colors.black.withOpacity(0.05),
               borderRadius: BorderRadius.circular(999),
             ),
             child: Row(
@@ -1829,7 +1959,7 @@ class UserMiniProfileButton extends StatelessWidget {
                       ? Icon(
                           Icons.person,
                           size: compact ? 14 : 16,
-                          color: Colors.black87,
+                          color: isDark ? Colors.white : Colors.black87,
                         )
                       : null,
                 ),
@@ -1844,6 +1974,7 @@ class UserMiniProfileButton extends StatelessWidget {
                     style: TextStyle(
                       fontSize: compact ? 12 : 13,
                       fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white : const Color(0xFF111827),
                     ),
                   ),
                 ),
@@ -1868,25 +1999,32 @@ class _PublicProfileStatChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final fg = isDark ? Colors.white : Colors.black87;
+    final bg = isDark
+        ? Colors.white.withOpacity(0.10)
+        : Colors.white.withOpacity(0.82);
+    final border = isDark
+        ? Colors.white.withOpacity(0.10)
+        : Colors.black.withOpacity(0.06);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.82),
+        color: bg,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: Colors.black.withOpacity(0.06),
-        ),
+        border: Border.all(color: border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: Colors.black87),
+          Icon(icon, size: 16, color: fg),
           const SizedBox(width: 6),
           Text(
             text,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
-              color: Colors.black87,
+              color: fg,
             ),
           ),
         ],
@@ -5665,6 +5803,8 @@ class _RequestDocCardState extends State<RequestDocCard> {
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
+      if (!mounted) return;
+
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => ChatScreen(
@@ -9299,18 +9439,25 @@ Future<String> ensureEventChat({
 
   String chatId = (freshData['chatId'] ?? '').toString();
   final createdBy = (freshData['createdBy'] ?? '').toString();
+  final title = (freshData['title'] ?? '').toString();
 
   if (chatId.isEmpty) {
     final chatRef = db.collection('event_chats').doc();
     chatId = chatRef.id;
 
+    final members = <String>{
+      if (createdBy.isNotEmpty) createdBy,
+      joinedUserId,
+    }.toList();
+
     await chatRef.set({
       'chatId': chatId,
       'eventId': eventId,
-      'eventTitle': (freshData['title'] ?? '').toString(),
+      'eventTitle': title,
       'createdBy': createdBy,
-      'members': [if (createdBy.isNotEmpty) createdBy, joinedUserId].toSet().toList(),
+      'members': members,
       'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
       'lastMessage': 'Чат ивента создан',
       'lastMessageType': 'system',
       'lastMessageAt': FieldValue.serverTimestamp(),
