@@ -2765,7 +2765,9 @@ class _AuthGateWithSettingsState extends State<AuthGateWithSettings> {
           return const VerifyEmailScreen();
         }
 
-        return MainShell(settings: widget.settings);
+        return OnboardingGate(
+          child: MainShell(settings: widget.settings),
+        );
       },
     );
   }
@@ -2852,8 +2854,6 @@ class SettingsScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-
-          /// тема + город
           Container(
             decoration: BoxDecoration(
               color: card,
@@ -2861,7 +2861,6 @@ class SettingsScreen extends StatelessWidget {
             ),
             child: Column(
               children: [
-
                 SwitchListTile(
                   value: isDarkMode,
                   onChanged: onThemeChanged,
@@ -2873,9 +2872,7 @@ class SettingsScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-
                 const Divider(height: 1),
-
                 ListTile(
                   title: Text(
                     'Город',
@@ -2884,23 +2881,19 @@ class SettingsScreen extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-
                   subtitle: Text(
                     selectedCity,
                     style: TextStyle(color: sub),
                   ),
-
                   trailing: DropdownButton<String>(
                     value: selectedCity,
                     underline: const SizedBox(),
-
                     items: cities.map((city) {
                       return DropdownMenuItem(
                         value: city,
                         child: Text(city),
                       );
                     }).toList(),
-
                     onChanged: (v) {
                       if (v != null) {
                         onCityChanged(v);
@@ -2908,25 +2901,42 @@ class SettingsScreen extends StatelessWidget {
                     },
                   ),
                 ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.privacy_tip_outlined),
+                  title: Text(
+                    'Privacy Policy',
+                    style: TextStyle(
+                      color: text,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'Посмотреть политику конфиденциальности',
+                    style: TextStyle(color: sub),
+                  ),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const PrivacyPolicyScreen(),
+                      ),
+                    );
+                  },
+                ),
               ],
             ),
           ),
-
           const SizedBox(height: 16),
-
-          /// выход
           Container(
             decoration: BoxDecoration(
               color: card,
               borderRadius: BorderRadius.circular(24),
             ),
             child: ListTile(
-
               leading: const Icon(
                 Icons.logout,
                 color: Colors.red,
               ),
-
               title: const Text(
                 'Выйти из аккаунта',
                 style: TextStyle(
@@ -2934,7 +2944,6 @@ class SettingsScreen extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
-
               onTap: () => _logout(context),
             ),
           ),
@@ -5134,16 +5143,7 @@ class _MainShellState extends State<MainShell> {
 
   late final List<Widget> _pages = [
     const FeedScreen(),
-    const EventsScreen(),
-    const CreateRequestScreen(),
     const ProfileScreen(),
-  ];
-
-  final List<String> _titles = const [
-    'Лента',
-    'Ивенты',
-    'Заявка',
-    'Профиль',
   ];
 
   @override
@@ -5234,11 +5234,6 @@ class _MainShellState extends State<MainShell> {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser!;
 
-    final chatsStream = FirebaseFirestore.instance
-        .collection('chats')
-        .where('members', arrayContains: user.uid)
-        .snapshots();
-
     final notificationsStream = FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
@@ -5248,144 +5243,145 @@ class _MainShellState extends State<MainShell> {
         .limit(1)
         .snapshots();
 
+    if (!_cityLoaded) {
+      return const Scaffold(
+        body: Stack(
+          children: [
+            FallingLeavesBackground(),
+            Center(child: LeafSpinner(size: 42)),
+          ],
+        ),
+      );
+    }
+
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: chatsStream,
-      builder: (context, chatSnap) {
-        int totalUnread = 0;
+      stream: notificationsStream,
+      builder: (context, notificationSnap) {
+        final docs = notificationSnap.data?.docs ?? const [];
+        _handleIncomingNotifications(docs);
 
-        if (chatSnap.hasData) {
-          totalUnread = getTotalUnreadFromChats(chatSnap.data!.docs, user.uid);
-        }
-
-        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: notificationsStream,
-          builder: (context, notificationSnap) {
-            if (notificationSnap.hasData) {
-              _handleIncomingNotifications(notificationSnap.data!.docs);
-            }
-
-            return Scaffold(
-              appBar: AppBar(
-                title: Text(_titles[_index]),
-                actions: [
-                  IconButton(
-                    tooltip: 'Настройки',
-                    onPressed: !_cityLoaded
-                        ? null
-                        : () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => SettingsScreen(
-                                  isDarkMode: widget.settings.isDarkMode,
-                                  onThemeChanged: (value) {
-                                    widget.settings.setDarkMode(value);
-                                  },
-                                  selectedCity: _selectedCity,
-                                  onCityChanged: (city) async {
-                                    await _changeCity(city);
-                                  },
-                                ),
-                              ),
-                            );
-                          },
-                    icon: const Icon(Icons.settings_outlined),
-                  ),
-                ],
+        return Scaffold(
+          body: Stack(
+            children: [
+              IndexedStack(
+                index: _index,
+                children: _pages,
               ),
-              body: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 220),
-                child: IndexedStack(
-                  key: ValueKey(_index),
-                  index: _index,
-                  children: _pages,
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 10,
+                child: SafeArea(
+                  top: false,
+                  child: Center(
+                    child: SizedBox(
+                      width: 320,
+                      child: Stack(
+                        alignment: Alignment.bottomCenter,
+                        children: [
+                          Container(
+                            height: 72,
+                            margin: const EdgeInsets.symmetric(horizontal: 12),
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).cardColor,
+                              borderRadius: BorderRadius.circular(999),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Color(0x18000000),
+                                  blurRadius: 18,
+                                  offset: Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: IconButton(
+                                    tooltip: 'Лента',
+                                    onPressed: () => setState(() => _index = 0),
+                                    icon: Icon(
+                                      Icons.dynamic_feed_outlined,
+                                      color: _index == 0
+                                          ? const Color(0xFFA8E932)
+                                          : null,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 56),
+                                Expanded(
+                                  child: IconButton(
+                                    tooltip: 'Профиль',
+                                    onPressed: () => setState(() => _index = 1),
+                                    icon: Icon(
+                                      Icons.person_outline,
+                                      color: _index == 1
+                                          ? const Color(0xFFA8E932)
+                                          : null,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 20,
+                            child: QuickActionsMenuButton(
+                              onOpenEvents: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => const EventsScreen(),
+                                  ),
+                                );
+                              },
+                              onOpenCreateRequest: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => const CreateRequestScreen(),
+                                  ),
+                                );
+                              },
+                              onOpenOrganizers: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => const OrganizersScreen(),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
-              bottomNavigationBar: NavigationBar(
-                selectedIndex: _index,
-                onDestinationSelected: (i) {
-                  setState(() => _index = i);
-                },
-                destinations: [
-                  const NavigationDestination(
-                    icon: Icon(Icons.dynamic_feed_outlined),
-                    selectedIcon: Icon(Icons.dynamic_feed),
-                    label: 'Лента',
-                  ),
-                  const NavigationDestination(
-                    icon: Icon(Icons.event_outlined),
-                    selectedIcon: Icon(Icons.event),
-                    label: 'Ивенты',
-                  ),
-                  const NavigationDestination(
-                    icon: Icon(Icons.add_circle_outline),
-                    selectedIcon: Icon(Icons.add_circle),
-                    label: 'Заявка',
-                  ),
-                  NavigationDestination(
-                    icon: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        const Icon(Icons.person_outline),
-                        if (totalUnread > 0)
-                          Positioned(
-                            right: -6,
-                            top: -6,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: Text(
-                                totalUnread > 99 ? '99+' : '$totalUnread',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
+              Positioned(
+                top: 14,
+                right: 14,
+                child: SafeArea(
+                  child: IconButton.filledTonal(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => SettingsScreen(
+                            isDarkMode: widget.settings.isDarkMode,
+                            onThemeChanged: (value) async {
+                              await widget.settings.setDarkMode(value);
+                              if (mounted) setState(() {});
+                            },
+                            selectedCity: _selectedCity,
+                            onCityChanged: _changeCity,
                           ),
-                      ],
-                    ),
-                    selectedIcon: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        const Icon(Icons.person),
-                        if (totalUnread > 0)
-                          Positioned(
-                            right: -6,
-                            top: -6,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: Text(
-                                totalUnread > 99 ? '99+' : '$totalUnread',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    label: 'Профиль',
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.settings_outlined),
                   ),
-                ],
+                ),
               ),
-            );
-          },
+            ],
+          ),
         );
       },
     );
@@ -6139,6 +6135,14 @@ class _RequestDocCardState extends State<RequestDocCard> {
   }
 }
 
+bool canCreateEventsByRole(String role) {
+  return role == 'admin' || role == 'moderator' || role == 'organizer';
+}
+
+bool canSeeReportsByRole(String role) {
+  return role == 'admin';
+}
+
 
 String getVolunteerRank({
   required int helpsCompleted,
@@ -6177,6 +6181,602 @@ double safePercent(int part, int total) {
 
 String formatPercent(int part, int total) {
   return '${safePercent(part, total).toStringAsFixed(0)}%';
+}
+
+class OnboardingPrivacyScreen extends StatefulWidget {
+  final VoidCallback onAccepted;
+
+  const OnboardingPrivacyScreen({
+    super.key,
+    required this.onAccepted,
+  });
+
+  @override
+  State<OnboardingPrivacyScreen> createState() => _OnboardingPrivacyScreenState();
+}
+class OnboardingGate extends StatefulWidget {
+  final Widget child;
+
+  const OnboardingGate({
+    super.key,
+    required this.child,
+  });
+
+  @override
+  State<OnboardingGate> createState() => _OnboardingGateState();
+}
+
+class _OnboardingGateState extends State<OnboardingGate> {
+  bool _loading = true;
+  bool _accepted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final accepted = prefs.getBool('onboarding_privacy_accepted_v1') ?? false;
+
+    if (!mounted) return;
+    setState(() {
+      _accepted = accepted;
+      _loading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        body: Center(child: LeafSpinner(size: 30)),
+      );
+    }
+
+    if (!_accepted) {
+      return OnboardingPrivacyScreen(
+        onAccepted: () {
+          if (!mounted) return;
+          setState(() => _accepted = true);
+        },
+      );
+    }
+
+    return widget.child;
+  }
+}
+
+
+class _OnboardingPrivacyScreenState extends State<OnboardingPrivacyScreen> {
+  final PageController _pageController = PageController();
+  int _page = 0;
+  bool _saving = false;
+
+  final List<Map<String, String>> _slides = const [
+    {
+      'title': 'Добро пожаловать',
+      'text':
+          'Здесь ты можешь помогать людям, откликаться на заявки, участвовать в ивентах и общаться в чатах.',
+    },
+    {
+      'title': 'Лента',
+      'text':
+          'Во вкладке ленты ты видишь заявки. Нажимаешь "Помочь" — и сразу переходишь в чат по заявке.',
+    },
+    {
+      'title': 'Быстрое меню',
+      'text':
+          'Кнопка по центру снизу открывает быстрые действия: ивенты, создать заявку и организаторы.',
+    },
+    {
+      'title': 'Ивенты',
+      'text':
+          'В ивентах можно зарегистрироваться, писать в общий чат участников и выходить из ивента.',
+    },
+  ];
+
+  Future<void> _accept() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('onboarding_privacy_accepted_v1', true);
+
+    if (!mounted) return;
+    widget.onAccepted();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final showPrivacy = _page >= _slides.length;
+
+    return Scaffold(
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: showPrivacy
+                  ? SingleChildScrollView(
+                      padding: const EdgeInsets.all(24),
+                      child: const Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Политика конфиденциальности',
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          SizedBox(height: 16),
+                          Text(
+                            'Мы собираем только те данные, которые нужны для работы приложения: профиль пользователя, заявки, чаты, регистрации на ивенты и служебные уведомления.\n\n'
+                            'Эти данные используются для того, чтобы пользователи могли помогать друг другу, общаться по заявкам и участвовать в ивентах.\n\n'
+                            'Мы не передаём данные третьим лицам вне работы сервиса, кроме случаев, когда это требуется законом или необходимо для технической работы приложения.\n\n'
+                            'Используя приложение, ты соглашаешься с обработкой данных, нужных для его работы.',
+                            style: TextStyle(
+                              fontSize: 16,
+                              height: 1.55,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : PageView.builder(
+                      controller: _pageController,
+                      itemCount: _slides.length,
+                      onPageChanged: (value) {
+                        setState(() => _page = value);
+                      },
+                      itemBuilder: (context, index) {
+                        final slide = _slides[index];
+
+                        return Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 160,
+                                height: 160,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFA8E932).withOpacity(0.18),
+                                  borderRadius: BorderRadius.circular(32),
+                                ),
+                                child: const Icon(
+                                  Icons.volunteer_activism,
+                                  size: 72,
+                                ),
+                              ),
+                              const SizedBox(height: 26),
+                              Text(
+                                slide['title']!,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              Text(
+                                slide['text']!,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  height: 1.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+              child: Column(
+                children: [
+                  if (!showPrivacy)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(
+                        _slides.length,
+                        (index) => Container(
+                          width: 10,
+                          height: 10,
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          decoration: BoxDecoration(
+                            color: _page == index
+                                ? const Color(0xFFA8E932)
+                                : Colors.grey.withOpacity(0.35),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: _saving
+                          ? null
+                          : () async {
+                              if (!showPrivacy) {
+                                if (_page == _slides.length - 1) {
+                                  setState(() => _page = _slides.length);
+                                } else {
+                                  await _pageController.nextPage(
+                                    duration: const Duration(milliseconds: 220),
+                                    curve: Curves.easeOut,
+                                  );
+                                }
+                              } else {
+                                await _accept();
+                              }
+                            },
+                      child: _saving
+                          ? const LeafSpinner(size: 18, color: Colors.white)
+                          : Text(showPrivacy ? 'Принять' : 'Далее'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+class OrganizersScreen extends StatelessWidget {
+  const OrganizersScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final stream = FirebaseFirestore.instance
+        .collection('users')
+        .where('role', whereIn: ['organizer', 'moderator', 'admin'])
+        .snapshots();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Организаторы'),
+      ),
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: stream,
+        builder: (context, snap) {
+          if (!snap.hasData) {
+            return const Center(child: LeafSpinner(size: 28));
+          }
+
+          final docs = snap.data!.docs;
+
+          if (docs.isEmpty) {
+            return const Center(
+              child: Text('Организаторов пока нет'),
+            );
+          }
+
+          return ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: docs.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            itemBuilder: (context, i) {
+              final data = docs[i].data();
+              final name = (data['name'] ?? 'Без имени').toString();
+              final avatarUrl = (data['avatarUrl'] ?? '').toString();
+              final role = (data['role'] ?? 'organizer').toString();
+
+              String roleText = 'Организатор';
+              if (role == 'admin') roleText = 'Администратор';
+              if (role == 'moderator') roleText = 'Модератор';
+
+              return Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 26,
+                      backgroundImage:
+                          avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
+                      child: avatarUrl.isEmpty ? const Icon(Icons.person) : null,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(roleText),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+
+class QuickActionsMenuButton extends StatefulWidget {
+  final VoidCallback onOpenEvents;
+  final VoidCallback onOpenCreateRequest;
+  final VoidCallback onOpenOrganizers;
+
+  const QuickActionsMenuButton({
+    super.key,
+    required this.onOpenEvents,
+    required this.onOpenCreateRequest,
+    required this.onOpenOrganizers,
+  });
+
+  @override
+  State<QuickActionsMenuButton> createState() => _QuickActionsMenuButtonState();
+}
+
+class _QuickActionsMenuButtonState extends State<QuickActionsMenuButton> {
+  final LayerLink _link = LayerLink();
+  OverlayEntry? _entry;
+  bool _open = false;
+
+  void _toggle() {
+    if (_open) {
+      _close();
+    } else {
+      _show();
+    }
+  }
+
+  void _show() {
+    final overlay = Overlay.of(context);
+
+    _entry = OverlayEntry(
+      builder: (context) => Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: _close,
+              child: Container(color: Colors.transparent),
+            ),
+          ),
+          CompositedTransformFollower(
+            link: _link,
+            showWhenUnlinked: false,
+            offset: const Offset(-76, -198),
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                width: 230,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x22000000),
+                      blurRadius: 18,
+                      offset: Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _tile(
+                      icon: Icons.event_outlined,
+                      title: 'Ивенты',
+                      onTap: () {
+                        _close();
+                        widget.onOpenEvents();
+                      },
+                    ),
+                    _tile(
+                      icon: Icons.add_box_outlined,
+                      title: 'Создать заявку',
+                      onTap: () {
+                        _close();
+                        widget.onOpenCreateRequest();
+                      },
+                    ),
+                    _tile(
+                      icon: Icons.groups_2_outlined,
+                      title: 'Организаторы',
+                      onTap: () {
+                        _close();
+                        widget.onOpenOrganizers();
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    overlay.insert(_entry!);
+    setState(() => _open = true);
+  }
+
+  void _close() {
+    _entry?.remove();
+    _entry = null;
+    if (mounted) setState(() => _open = false);
+  }
+
+  Widget _tile({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+        child: Row(
+          children: [
+            Icon(icon),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _close();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CompositedTransformTarget(
+      link: _link,
+      child: GestureDetector(
+        onTap: _toggle,
+        child: Container(
+          width: 62,
+          height: 62,
+          decoration: BoxDecoration(
+            color: const Color(0xFFA8E932),
+            borderRadius: BorderRadius.circular(999),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x22000000),
+                blurRadius: 18,
+                offset: Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Icon(
+            _open ? Icons.close : Icons.add,
+            color: Colors.black,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+
+class PrivacyPolicyScreen extends StatelessWidget {
+  const PrivacyPolicyScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? const Color(0xFF0B1220) : const Color(0xFFF8FAFC);
+    final text = isDark ? Colors.white : const Color(0xFF111827);
+
+    return Scaffold(
+      backgroundColor: bg,
+      appBar: AppBar(
+        title: const Text('Privacy Policy'),
+        backgroundColor: bg,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Text(
+          'Мы собираем только те данные, которые нужны для работы приложения: профиль пользователя, заявки, чаты, регистрации на ивенты и служебные уведомления.\n\n'
+          'Эти данные используются для того, чтобы пользователи могли помогать друг другу, общаться по заявкам и участвовать в ивентах.\n\n'
+          'Мы не передаём данные третьим лицам вне работы сервиса, кроме случаев, когда это требуется законом или необходимо для технической работы приложения.\n\n'
+          'Используя приложение, ты соглашаешься с обработкой данных, нужных для его работы.',
+          style: TextStyle(
+            fontSize: 16,
+            height: 1.6,
+            color: text,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+class OnboardingGate extends StatefulWidget {
+  final Widget child;
+
+  const OnboardingGate({
+    super.key,
+    required this.child,
+  });
+
+  @override
+  State<OnboardingGate> createState() => _OnboardingGateState();
+}
+
+class _OnboardingGateState extends State<OnboardingGate> {
+  bool _loading = true;
+  bool _accepted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final accepted = prefs.getBool('onboarding_privacy_accepted_v1') ?? false;
+
+    if (!mounted) return;
+    setState(() {
+      _accepted = accepted;
+      _loading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        body: Center(child: LeafSpinner(size: 30)),
+      );
+    }
+
+    if (!_accepted) {
+      return OnboardingPrivacyScreen(
+        onAccepted: () {
+          if (!mounted) return;
+          setState(() => _accepted = true);
+        },
+      );
+    }
+
+    return widget.child;
+  }
 }
 
 
@@ -8202,10 +8802,10 @@ class _EventsScreenState extends State<EventsScreen> {
         .get();
     final role = (roleSnap.data()?['role'] ?? 'user').toString();
 
-    if (role != 'admin' && role != 'moderator') {
+    if (!canCreateEventsByRole(role)) {
       AppNotice.show(
         context,
-        message: 'Только модератор или админ может создавать ивенты',
+        message: 'Только организатор, модератор или админ может создавать ивенты',
         type: AppNoticeType.error,
       );
       return;
@@ -8238,113 +8838,110 @@ class _EventsScreenState extends State<EventsScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final stream = FirebaseFirestore.instance
-        .collection('events')
-        .where('isActive', isEqualTo: true)
-        .snapshots();
+@override
+Widget build(BuildContext context) {
+  final stream = FirebaseFirestore.instance
+      .collection('events')
+      .where('isActive', isEqualTo: true)
+      .snapshots();
 
-    return FutureBuilder<Map<String, dynamic>?>(
-      future: _loadRole(),
-      builder: (context, roleSnap) {
-        final role = (roleSnap.data?['role'] ?? 'user').toString();
-        final canCreate = role == 'admin' || role == 'moderator';
-        final isAdmin = role == 'admin';
+  return FutureBuilder<Map<String, dynamic>?>(
+    future: _loadRole(),
+    builder: (context, roleSnap) {
+      final role = (roleSnap.data?['role'] ?? 'user').toString();
+      final canCreate = canCreateEventsByRole(role);
+      final canSeeReports = canSeeReportsByRole(role);
 
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        'Ивенты',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
-                        ),
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Ивенты',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                    if (isAdmin)
-                      OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const AdminReportsScreen(),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.flag_outlined),
-                        label: const Text('Жалобы'),
-                      ),
-                    if (canCreate) ...[
-                      const SizedBox(width: 8),
-                      FilledButton.icon(
-                        onPressed: () => _openCreateEventDialog(context),
-                        icon: const Icon(Icons.add),
-                        label: const Text('Создать'),
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 14),
-                Expanded(
-                  child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                    stream: stream,
-                    builder: (context, snap) {
-                      if (snap.connectionState == ConnectionState.waiting) {
-                        return const Center(child: LeafSpinner(size: 30));
-                      }
-
-                      if (snap.hasError) {
-                        return Center(
-                          child: Text('Ошибка загрузки ивентов: ${snap.error}'),
-                        );
-                      }
-
-                      if (!snap.hasData || snap.data!.docs.isEmpty) {
-                        return const Center(
-                          child: Text('Пока что нет новых ивентов'),
-                        );
-                      }
-
-                      final docs = snap.data!.docs.toList();
-
-                      docs.sort((a, b) {
-                        final aTs = a.data()['startAt'] as Timestamp?;
-                        final bTs = b.data()['startAt'] as Timestamp?;
-                        final aDate = aTs?.toDate() ?? DateTime(2100);
-                        final bDate = bTs?.toDate() ?? DateTime(2100);
-                        return aDate.compareTo(bDate);
-                      });
-
-                      return ListView.separated(
-                        itemCount: docs.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 16),
-                        itemBuilder: (context, i) {
-                          final doc = docs[i];
-                          final data = doc.data();
-
-                          return EventBigCard(
-                            eventId: doc.id,
-                            data: data,
-                          );
-                        },
-                      );
-                    },
                   ),
+                  if (canSeeReports)
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const AdminReportsScreen(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.flag_outlined),
+                      label: const Text('Жалобы'),
+                    ),
+                  if (canCreate) ...[
+                    const SizedBox(width: 8),
+                    FilledButton.icon(
+                      onPressed: () => _openCreateEventDialog(context),
+                      icon: const Icon(Icons.add),
+                      label: const Text('Создать'),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 14),
+              Expanded(
+                child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: stream,
+                  builder: (context, snap) {
+                    if (snap.connectionState == ConnectionState.waiting) {
+                      return const Center(child: LeafSpinner(size: 30));
+                    }
+
+                    if (snap.hasError) {
+                      return Center(
+                        child: Text('Ошибка загрузки ивентов: ${snap.error}'),
+                      );
+                    }
+
+                    if (!snap.hasData || snap.data!.docs.isEmpty) {
+                      return const Center(
+                        child: Text('Пока что нет новых ивентов'),
+                      );
+                    }
+
+                    final docs = snap.data!.docs.toList();
+
+                    docs.sort((a, b) {
+                      final aTs = a.data()['startAt'] as Timestamp?;
+                      final bTs = b.data()['startAt'] as Timestamp?;
+                      final aDate = aTs?.toDate() ?? DateTime(2100);
+                      final bDate = bTs?.toDate() ?? DateTime(2100);
+                      return aDate.compareTo(bDate);
+                    });
+
+                    return ListView.separated(
+                      itemCount: docs.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 16),
+                      itemBuilder: (context, i) {
+                        final doc = docs[i];
+                        return EventBigCard(
+                          eventId: doc.id,
+                          data: doc.data(),
+                        );
+                      },
+                    );
+                  },
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        );
-      },
-    );
-  }
+        ),
+      );
+    },
+  );
 }
 
 class AdminReportsScreen extends StatelessWidget {
