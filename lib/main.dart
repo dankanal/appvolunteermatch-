@@ -6725,59 +6725,6 @@ class PrivacyPolicyScreen extends StatelessWidget {
 }
 
 
-class OnboardingGate extends StatefulWidget {
-  final Widget child;
-
-  const OnboardingGate({
-    super.key,
-    required this.child,
-  });
-
-  @override
-  State<OnboardingGate> createState() => _OnboardingGateState();
-}
-
-class _OnboardingGateState extends State<OnboardingGate> {
-  bool _loading = true;
-  bool _accepted = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final accepted = prefs.getBool('onboarding_privacy_accepted_v1') ?? false;
-
-    if (!mounted) return;
-    setState(() {
-      _accepted = accepted;
-      _loading = false;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_loading) {
-      return const Scaffold(
-        body: Center(child: LeafSpinner(size: 30)),
-      );
-    }
-
-    if (!_accepted) {
-      return OnboardingPrivacyScreen(
-        onAccepted: () {
-          if (!mounted) return;
-          setState(() => _accepted = true);
-        },
-      );
-    }
-
-    return widget.child;
-  }
-}
 
 
 class _GlassChip extends StatelessWidget {
@@ -8838,111 +8785,113 @@ class _EventsScreenState extends State<EventsScreen> {
     );
   }
 
-@override
-Widget build(BuildContext context) {
-  final stream = FirebaseFirestore.instance
-      .collection('events')
-      .where('isActive', isEqualTo: true)
-      .snapshots();
+  @override
+  Widget build(BuildContext context) {
+    final stream = FirebaseFirestore.instance
+        .collection('events')
+        .where('isActive', isEqualTo: true)
+        .snapshots();
 
-  return FutureBuilder<Map<String, dynamic>?>(
-    future: _loadRole(),
-    builder: (context, roleSnap) {
-      final role = (roleSnap.data?['role'] ?? 'user').toString();
-      final canCreate = canCreateEventsByRole(role);
-      final canSeeReports = canSeeReportsByRole(role);
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: _loadRole(),
+      builder: (context, roleSnap) {
+        final role = (roleSnap.data?['role'] ?? 'user').toString();
+        final canCreate = canCreateEventsByRole(role);
+        final canSeeReports = canSeeReportsByRole(role);
 
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'Ивенты',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Ивенты',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
-                  ),
-                  if (canSeeReports)
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const AdminReportsScreen(),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.flag_outlined),
-                      label: const Text('Жалобы'),
-                    ),
-                  if (canCreate) ...[
-                    const SizedBox(width: 8),
-                    FilledButton.icon(
-                      onPressed: () => _openCreateEventDialog(context),
-                      icon: const Icon(Icons.add),
-                      label: const Text('Создать'),
-                    ),
+                    if (canSeeReports)
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const AdminReportsScreen(),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.flag_outlined),
+                        label: const Text('Жалобы'),
+                      ),
+                    if (canCreate) ...[
+                      const SizedBox(width: 8),
+                      FilledButton.icon(
+                        onPressed: () => _openCreateEventDialog(context),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Создать'),
+                      ),
+                    ],
                   ],
-                ],
-              ),
-              const SizedBox(height: 14),
-              Expanded(
-                child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                  stream: stream,
-                  builder: (context, snap) {
-                    if (snap.connectionState == ConnectionState.waiting) {
-                      return const Center(child: LeafSpinner(size: 30));
-                    }
-
-                    if (snap.hasError) {
-                      return Center(
-                        child: Text('Ошибка загрузки ивентов: ${snap.error}'),
-                      );
-                    }
-
-                    if (!snap.hasData || snap.data!.docs.isEmpty) {
-                      return const Center(
-                        child: Text('Пока что нет новых ивентов'),
-                      );
-                    }
-
-                    final docs = snap.data!.docs.toList();
-
-                    docs.sort((a, b) {
-                      final aTs = a.data()['startAt'] as Timestamp?;
-                      final bTs = b.data()['startAt'] as Timestamp?;
-                      final aDate = aTs?.toDate() ?? DateTime(2100);
-                      final bDate = bTs?.toDate() ?? DateTime(2100);
-                      return aDate.compareTo(bDate);
-                    });
-
-                    return ListView.separated(
-                      itemCount: docs.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 16),
-                      itemBuilder: (context, i) {
-                        final doc = docs[i];
-                        return EventBigCard(
-                          eventId: doc.id,
-                          data: doc.data(),
-                        );
-                      },
-                    );
-                  },
                 ),
-              ),
-            ],
+                const SizedBox(height: 14),
+                Expanded(
+                  child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                    stream: stream,
+                    builder: (context, snap) {
+                      if (snap.connectionState == ConnectionState.waiting) {
+                        return const Center(child: LeafSpinner(size: 30));
+                      }
+
+                      if (snap.hasError) {
+                        return Center(
+                          child: Text('Ошибка загрузки ивентов: ${snap.error}'),
+                        );
+                      }
+
+                      if (!snap.hasData || snap.data!.docs.isEmpty) {
+                        return const Center(
+                          child: Text('Пока что нет новых ивентов'),
+                        );
+                      }
+
+                      final docs = snap.data!.docs.toList();
+
+                      docs.sort((a, b) {
+                        final aTs = a.data()['startAt'] as Timestamp?;
+                        final bTs = b.data()['startAt'] as Timestamp?;
+                        final aDate = aTs?.toDate() ?? DateTime(2100);
+                        final bDate = bTs?.toDate() ?? DateTime(2100);
+                        return aDate.compareTo(bDate);
+                      });
+
+                      return ListView.separated(
+                        itemCount: docs.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 16),
+                        itemBuilder: (context, i) {
+                          final doc = docs[i];
+                          return EventBigCard(
+                            eventId: doc.id,
+                            data: doc.data(),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      );
-    },
-  );
+        );
+      },
+    );
+  }
 }
+
 
 class AdminReportsScreen extends StatelessWidget {
   const AdminReportsScreen({super.key});
