@@ -5254,6 +5254,9 @@ class _MainShellState extends State<MainShell> {
       );
     }
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final shellBg = isDark ? const Color(0xFF0B120F) : const Color(0xFFF6F8F3);
+
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: notificationsStream,
       builder: (context, notificationSnap) {
@@ -5261,71 +5264,130 @@ class _MainShellState extends State<MainShell> {
         _handleIncomingNotifications(docs);
 
         return Scaffold(
+          backgroundColor: shellBg,
           body: Stack(
             children: [
-              IndexedStack(
-                index: _index,
-                children: _pages,
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 260),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeOutCubic,
+                child: IndexedStack(
+                  key: ValueKey(_index),
+                  index: _index,
+                  children: _pages,
+                ),
               ),
+
+              Positioned(
+                top: 14,
+                right: 14,
+                child: SafeArea(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.white.withOpacity(0.08)
+                          : Colors.white.withOpacity(0.84),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: isDark
+                            ? Colors.white.withOpacity(0.06)
+                            : Colors.black.withOpacity(0.05),
+                      ),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x12000000),
+                          blurRadius: 16,
+                          offset: Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: IconButton(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => SettingsScreen(
+                              isDarkMode: widget.settings.isDarkMode,
+                              onThemeChanged: (value) async {
+                                await widget.settings.setDarkMode(value);
+                                if (mounted) setState(() {});
+                              },
+                              selectedCity: _selectedCity,
+                              onCityChanged: _changeCity,
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.settings_outlined),
+                    ),
+                  ),
+                ),
+              ),
+
               Positioned(
                 left: 0,
                 right: 0,
-                bottom: 10,
+                bottom: 12,
                 child: SafeArea(
                   top: false,
                   child: Center(
                     child: SizedBox(
-                      width: 320,
+                      width: 340,
+                      height: 96,
                       child: Stack(
+                        clipBehavior: Clip.none,
                         alignment: Alignment.bottomCenter,
                         children: [
-                          Container(
-                            height: 72,
-                            margin: const EdgeInsets.symmetric(horizontal: 12),
-                            padding: const EdgeInsets.symmetric(horizontal: 24),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).cardColor,
-                              borderRadius: BorderRadius.circular(999),
-                              boxShadow: const [
-                                BoxShadow(
-                                  color: Color(0x18000000),
-                                  blurRadius: 18,
-                                  offset: Offset(0, 8),
+                          Positioned(
+                            left: 12,
+                            right: 12,
+                            bottom: 0,
+                            child: Container(
+                              height: 72,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 20),
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? const Color(0xFF121915).withOpacity(0.95)
+                                    : Colors.white.withOpacity(0.96),
+                                borderRadius: BorderRadius.circular(28),
+                                border: Border.all(
+                                  color: isDark
+                                      ? Colors.white.withOpacity(0.06)
+                                      : Colors.black.withOpacity(0.05),
                                 ),
-                              ],
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: IconButton(
-                                    tooltip: 'Лента',
-                                    onPressed: () => setState(() => _index = 0),
-                                    icon: Icon(
-                                      Icons.dynamic_feed_outlined,
-                                      color: _index == 0
-                                          ? const Color(0xFFA8E932)
-                                          : null,
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Color(0x18000000),
+                                    blurRadius: 24,
+                                    offset: Offset(0, 10),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: _BottomNavItem(
+                                      icon: Icons.dynamic_feed_rounded,
+                                      label: 'Лента',
+                                      active: _index == 0,
+                                      onTap: () => setState(() => _index = 0),
                                     ),
                                   ),
-                                ),
-                                const SizedBox(width: 56),
-                                Expanded(
-                                  child: IconButton(
-                                    tooltip: 'Профиль',
-                                    onPressed: () => setState(() => _index = 1),
-                                    icon: Icon(
-                                      Icons.person_outline,
-                                      color: _index == 1
-                                          ? const Color(0xFFA8E932)
-                                          : null,
+                                  const SizedBox(width: 74),
+                                  Expanded(
+                                    child: _BottomNavItem(
+                                      icon: Icons.person_rounded,
+                                      label: 'Профиль',
+                                      active: _index == 1,
+                                      onTap: () => setState(() => _index = 1),
                                     ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                           Positioned(
-                            bottom: 20,
+                            bottom: 6,
                             child: QuickActionsMenuButton(
                               onOpenEvents: () {
                                 Navigator.of(context).push(
@@ -5337,7 +5399,8 @@ class _MainShellState extends State<MainShell> {
                               onOpenCreateRequest: () {
                                 Navigator.of(context).push(
                                   MaterialPageRoute(
-                                    builder: (_) => const CreateRequestScreen(),
+                                    builder: (_) =>
+                                        const CreateRequestScreen(),
                                   ),
                                 );
                               },
@@ -5356,34 +5419,69 @@ class _MainShellState extends State<MainShell> {
                   ),
                 ),
               ),
-              Positioned(
-                top: 14,
-                right: 14,
-                child: SafeArea(
-                  child: IconButton.filledTonal(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => SettingsScreen(
-                            isDarkMode: widget.settings.isDarkMode,
-                            onThemeChanged: (value) async {
-                              await widget.settings.setDarkMode(value);
-                              if (mounted) setState(() {});
-                            },
-                            selectedCity: _selectedCity,
-                            onCityChanged: _changeCity,
-                          ),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.settings_outlined),
-                  ),
-                ),
-              ),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+
+
+class _BottomNavItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _BottomNavItem({
+    required this.icon,
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final activeColor = const Color(0xFF9DDC39);
+    final inactiveColor = Theme.of(context).brightness == Brightness.dark
+        ? Colors.white70
+        : const Color(0xFF667085);
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: active
+              ? activeColor.withOpacity(0.14)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 22,
+              color: active ? activeColor : inactiveColor,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: active ? activeColor : inactiveColor,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -6534,10 +6632,22 @@ class QuickActionsMenuButton extends StatefulWidget {
   State<QuickActionsMenuButton> createState() => _QuickActionsMenuButtonState();
 }
 
-class _QuickActionsMenuButtonState extends State<QuickActionsMenuButton> {
+class _QuickActionsMenuButtonState extends State<QuickActionsMenuButton>
+    with SingleTickerProviderStateMixin {
   final LayerLink _link = LayerLink();
   OverlayEntry? _entry;
   bool _open = false;
+
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 230),
+  );
+
+  late final CurvedAnimation _curve = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeOutCubic,
+    reverseCurve: Curves.easeInCubic,
+  );
 
   void _toggle() {
     if (_open) {
@@ -6551,111 +6661,137 @@ class _QuickActionsMenuButtonState extends State<QuickActionsMenuButton> {
     final overlay = Overlay.of(context);
 
     _entry = OverlayEntry(
-      builder: (context) => Stack(
-        children: [
-          Positioned.fill(
-            child: GestureDetector(
-              onTap: _close,
-              child: Container(color: Colors.transparent),
-            ),
-          ),
-          CompositedTransformFollower(
-            link: _link,
-            showWhenUnlinked: false,
-            offset: const Offset(-76, -198),
-            child: Material(
-              color: Colors.transparent,
-              child: Container(
-                width: 230,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).cardColor,
-                  borderRadius: BorderRadius.circular(22),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x22000000),
-                      blurRadius: 18,
-                      offset: Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _tile(
-                      icon: Icons.event_outlined,
-                      title: 'Ивенты',
-                      onTap: () {
-                        _close();
-                        widget.onOpenEvents();
-                      },
-                    ),
-                    _tile(
-                      icon: Icons.add_box_outlined,
-                      title: 'Создать заявку',
-                      onTap: () {
-                        _close();
-                        widget.onOpenCreateRequest();
-                      },
-                    ),
-                    _tile(
-                      icon: Icons.groups_2_outlined,
-                      title: 'Организаторы',
-                      onTap: () {
-                        _close();
-                        widget.onOpenOrganizers();
-                      },
-                    ),
-                  ],
+      builder: (context) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final sheetColor = isDark ? const Color(0xFF111827) : Colors.white;
+        final textColor = isDark ? Colors.white : const Color(0xFF111827);
+        final subColor = isDark ? Colors.white70 : const Color(0xFF6B7280);
+
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: _close,
+                child: AnimatedBuilder(
+                  animation: _curve,
+                  builder: (_, __) {
+                    return Container(
+                      color: Colors.black.withOpacity(0.14 * _curve.value),
+                    );
+                  },
                 ),
               ),
             ),
-          ),
-        ],
-      ),
-    );
-
-    overlay.insert(_entry!);
-    setState(() => _open = true);
-  }
-
-  void _close() {
-    _entry?.remove();
-    _entry = null;
-    if (mounted) setState(() => _open = false);
-  }
-
-  Widget _tile({
-    required IconData icon,
-    required String title,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-        child: Row(
-          children: [
-            Icon(icon),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                ),
+            CompositedTransformFollower(
+              link: _link,
+              showWhenUnlinked: false,
+              offset: const Offset(-110, -232),
+              child: AnimatedBuilder(
+                animation: _curve,
+                builder: (_, __) {
+                  return Transform.translate(
+                    offset: Offset(0, 18 * (1 - _curve.value)),
+                    child: Transform.scale(
+                      scale: 0.94 + (0.06 * _curve.value),
+                      child: Opacity(
+                        opacity: _curve.value,
+                        child: Material(
+                          color: Colors.transparent,
+                          child: Container(
+                            width: 278,
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: sheetColor,
+                              borderRadius: BorderRadius.circular(28),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Color(0x22000000),
+                                  blurRadius: 28,
+                                  offset: Offset(0, 14),
+                                ),
+                              ],
+                              border: Border.all(
+                                color: isDark
+                                    ? Colors.white.withOpacity(0.06)
+                                    : Colors.black.withOpacity(0.05),
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _QuickActionTile(
+                                  icon: Icons.edit_note_rounded,
+                                  iconBg: const Color(0xFFE9F7D2),
+                                  iconColor: const Color(0xFF254014),
+                                  title: 'Создать заявку',
+                                  subtitle: 'Новая просьба о помощи',
+                                  textColor: textColor,
+                                  subColor: subColor,
+                                  onTap: () {
+                                    _close();
+                                    widget.onOpenCreateRequest();
+                                  },
+                                ),
+                                _QuickActionTile(
+                                  icon: Icons.event_rounded,
+                                  iconBg: const Color(0xFFDDF1FF),
+                                  iconColor: const Color(0xFF124B75),
+                                  title: 'Ивенты',
+                                  subtitle: 'Мероприятия и регистрации',
+                                  textColor: textColor,
+                                  subColor: subColor,
+                                  onTap: () {
+                                    _close();
+                                    widget.onOpenEvents();
+                                  },
+                                ),
+                                _QuickActionTile(
+                                  icon: Icons.groups_rounded,
+                                  iconBg: const Color(0xFFFFEDD4),
+                                  iconColor: const Color(0xFF8A4B00),
+                                  title: 'Организаторы',
+                                  subtitle: 'Кто проводит ивенты',
+                                  textColor: textColor,
+                                  subColor: subColor,
+                                  onTap: () {
+                                    _close();
+                                    widget.onOpenOrganizers();
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ],
-        ),
-      ),
+        );
+      },
     );
+
+    overlay.insert(_entry!);
+    _open = true;
+    _controller.forward(from: 0);
+    setState(() {});
+  }
+
+  Future<void> _close() async {
+    if (!_open) return;
+    await _controller.reverse();
+    _entry?.remove();
+    _entry = null;
+    _open = false;
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
-    _close();
+    _entry?.remove();
+    _controller.dispose();
     super.dispose();
   }
 
@@ -6665,23 +6801,41 @@ class _QuickActionsMenuButtonState extends State<QuickActionsMenuButton> {
       link: _link,
       child: GestureDetector(
         onTap: _toggle,
-        child: Container(
-          width: 62,
-          height: 62,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          width: 68,
+          height: 68,
           decoration: BoxDecoration(
-            color: const Color(0xFFA8E932),
-            borderRadius: BorderRadius.circular(999),
-            boxShadow: const [
+            gradient: const LinearGradient(
+              colors: [
+                Color(0xFFB9F24E),
+                Color(0xFF98D631),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            shape: BoxShape.circle,
+            boxShadow: [
               BoxShadow(
-                color: Color(0x22000000),
-                blurRadius: 18,
-                offset: Offset(0, 8),
+                color: Colors.black.withOpacity(_open ? 0.24 : 0.18),
+                blurRadius: _open ? 28 : 18,
+                offset: Offset(0, _open ? 12 : 8),
               ),
             ],
+            border: Border.all(
+              color: Colors.white.withOpacity(0.70),
+              width: 1.4,
+            ),
           ),
-          child: Icon(
-            _open ? Icons.close : Icons.add,
-            color: Colors.black,
+          child: AnimatedRotation(
+            turns: _open ? 0.03 : 0,
+            duration: const Duration(milliseconds: 180),
+            child: const Icon(
+              Icons.grid_view_rounded,
+              color: Color(0xFF0F172A),
+              size: 28,
+            ),
           ),
         ),
       ),
@@ -6690,6 +6844,187 @@ class _QuickActionsMenuButtonState extends State<QuickActionsMenuButton> {
 }
 
 
+class _AppPageHeroHeader extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final List<Color> gradient;
+  final VoidCallback onBack;
+  final Widget? trailing;
+
+  const _AppPageHeroHeader({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.gradient,
+    required this.onBack,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: gradient,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x18000000),
+            blurRadius: 24,
+            offset: Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: onBack,
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(isDark ? 0.10 : 0.18),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.18),
+                ),
+              ),
+              child: const Icon(
+                Icons.arrow_back_ios_new_rounded,
+                color: Colors.white,
+                size: 18,
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.14),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Icon(icon, color: Colors.white, size: 18),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 28,
+                    height: 1.0,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    height: 1.4,
+                    color: Colors.white.withOpacity(0.92),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (trailing != null) ...[
+            const SizedBox(width: 10),
+            trailing!,
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+
+class _QuickActionTile extends StatelessWidget {
+  final IconData icon;
+  final Color iconBg;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+  final Color textColor;
+  final Color subColor;
+  final VoidCallback onTap;
+
+  const _QuickActionTile({
+    required this.icon,
+    required this.iconBg,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    required this.textColor,
+    required this.subColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: iconBg,
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: Icon(icon, color: iconColor),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: textColor,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: subColor,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: subColor,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class PrivacyPolicyScreen extends StatelessWidget {
   const PrivacyPolicyScreen({super.key});
@@ -6972,27 +7307,19 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
       final achievementText =
           await AchievementService().checkAfterRequestCreated();
 
-      _title.clear();
-      _desc.clear();
-
-      setState(() {
-        _category = 'Еда';
-        _hoursToLive = 24;
-        _helpersNeeded = 1;
-        _selectedTags.clear();
-      });
-
       if (!mounted) return;
 
       final text = achievementText == null
-          ? 'Заявка опубликована. Город: $_selectedCity'
-          : 'Заявка опубликована. Город: $_selectedCity\n$achievementText';
+          ? 'Заявка опубликована'
+          : 'Заявка опубликована\n$achievementText';
 
       AppNotice.show(
         context,
         message: text,
         type: AppNoticeType.success,
       );
+
+      Navigator.of(context).pop();
     } on FirebaseException catch (e) {
       if (!mounted) return;
       AppNotice.show(
@@ -7014,144 +7341,236 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          const Text(
-            'Создать заявку',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 16),
-          DropdownButtonFormField<String>(
-            value: _selectedCity,
-            items: kAvailableCities
-                .map((city) => DropdownMenuItem(
-                      value: city,
-                      child: Text(city),
-                    ))
-                .toList(),
-            onChanged: (v) {
-              setState(() => _selectedCity = v ?? kAvailableCities.first);
-            },
-            decoration: const InputDecoration(
-              labelText: 'Город',
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final pageBg = isDark ? const Color(0xFF0D1511) : const Color(0xFFF5F8F2);
+
+    return Scaffold(
+      backgroundColor: pageBg,
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          children: [
+            _AppPageHeroHeader(
+              title: 'Создать заявку',
+              subtitle:
+                  'Оформи просьбу красиво и понятно — так на неё быстрее откликнутся.',
+              icon: Icons.edit_note_rounded,
+              gradient: const [
+                Color(0xFF1B4332),
+                Color(0xFF2D6A4F),
+                Color(0xFF40916C),
+              ],
+              onBack: () => Navigator.of(context).pop(),
             ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _title,
-            decoration: const InputDecoration(
-              labelText: 'Название',
+            const SizedBox(height: 16),
+
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x12000000),
+                    blurRadius: 18,
+                    offset: Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  TextField(
+                    controller: _title,
+                    decoration: const InputDecoration(
+                      labelText: 'Название заявки',
+                      hintText: 'Например: Нужны продукты пожилому человеку',
+                      prefixIcon: Icon(Icons.title_rounded),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _desc,
+                    maxLines: 5,
+                    decoration: const InputDecoration(
+                      labelText: 'Описание',
+                      hintText: 'Коротко объясни, какая помощь нужна',
+                      prefixIcon: Icon(Icons.notes_rounded),
+                      alignLabelWithHint: true,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: _selectedCity,
+                    items: kAvailableCities
+                        .map((city) => DropdownMenuItem(
+                              value: city,
+                              child: Text(city),
+                            ))
+                        .toList(),
+                    onChanged: (v) {
+                      setState(() => _selectedCity = v ?? kAvailableCities.first);
+                    },
+                    decoration: const InputDecoration(
+                      labelText: 'Город',
+                      prefixIcon: Icon(Icons.location_city_rounded),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: _category,
+                    items: const [
+                      DropdownMenuItem(value: 'Еда', child: Text('Еда')),
+                      DropdownMenuItem(value: 'Медицина', child: Text('Медицина')),
+                      DropdownMenuItem(value: 'Учёба', child: Text('Учёба')),
+                      DropdownMenuItem(value: 'Техника', child: Text('Техника')),
+                      DropdownMenuItem(value: 'Разговор', child: Text('Разговор')),
+                      DropdownMenuItem(value: 'Животные', child: Text('Животные')),
+                    ],
+                    onChanged: (v) => setState(() => _category = v ?? 'Еда'),
+                    decoration: const InputDecoration(
+                      labelText: 'Категория',
+                      prefixIcon: Icon(Icons.category_rounded),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<int>(
+                          value: _helpersNeeded,
+                          items: const [
+                            DropdownMenuItem(value: 1, child: Text('1')),
+                            DropdownMenuItem(value: 2, child: Text('2')),
+                            DropdownMenuItem(value: 3, child: Text('3')),
+                            DropdownMenuItem(value: 4, child: Text('4')),
+                            DropdownMenuItem(value: 5, child: Text('5')),
+                          ],
+                          onChanged: (v) =>
+                              setState(() => _helpersNeeded = v ?? 1),
+                          decoration: const InputDecoration(
+                            labelText: 'Помощников',
+                            prefixIcon: Icon(Icons.groups_2_rounded),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: DropdownButtonFormField<int>(
+                          value: _hoursToLive,
+                          items: const [
+                            DropdownMenuItem(value: 1, child: Text('1 час')),
+                            DropdownMenuItem(value: 2, child: Text('2 часа')),
+                            DropdownMenuItem(value: 3, child: Text('3 часа')),
+                            DropdownMenuItem(value: 6, child: Text('6 часов')),
+                            DropdownMenuItem(value: 12, child: Text('12 часов')),
+                            DropdownMenuItem(value: 24, child: Text('1 день')),
+                          ],
+                          onChanged: (v) =>
+                              setState(() => _hoursToLive = v ?? 24),
+                          decoration: const InputDecoration(
+                            labelText: 'Срок',
+                            prefixIcon: Icon(Icons.schedule_rounded),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            value: _category,
-            items: const [
-              DropdownMenuItem(value: 'Еда', child: Text('Еда')),
-              DropdownMenuItem(value: 'Медицина', child: Text('Медицина')),
-              DropdownMenuItem(value: 'Учёба', child: Text('Учёба')),
-              DropdownMenuItem(value: 'Техника', child: Text('Техника')),
-              DropdownMenuItem(value: 'Разговор', child: Text('Разговор')),
-              DropdownMenuItem(value: 'Животные', child: Text('Животные')),
-            ],
-            onChanged: (v) => setState(() => _category = v ?? 'Еда'),
-            decoration: const InputDecoration(
-              labelText: 'Категория',
+
+            const SizedBox(height: 16),
+
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x12000000),
+                    blurRadius: 18,
+                    offset: Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Теги заявки',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: kAvailableRequestTags.map((tag) {
+                      final selected = _selectedTags.contains(tag);
+                      return FilterChip(
+                        label: Text(tag),
+                        selected: selected,
+                        onSelected: (value) {
+                          setState(() {
+                            if (value) {
+                              _selectedTags.add(tag);
+                            } else {
+                              _selectedTags.remove(tag);
+                            }
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: (_hoursToLive <= 3 || _selectedTags.contains('Срочно'))
+                          ? Colors.red.withOpacity(0.08)
+                          : (isDark
+                              ? Colors.white.withOpacity(0.05)
+                              : Colors.black.withOpacity(0.03)),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Text(
+                      (_hoursToLive <= 3 || _selectedTags.contains('Срочно'))
+                          ? 'Эта заявка будет автоматически помечена как срочная.'
+                          : 'Обычная заявка без срочного статуса.',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white : const Color(0xFF111827),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _desc,
-            maxLines: 5,
-            decoration: const InputDecoration(
-              labelText: 'Описание',
+
+            const SizedBox(height: 18),
+
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _busy ? null : _submit,
+                icon: _busy
+                    ? const LeafSpinner(size: 18, color: Colors.white)
+                    : const Icon(Icons.arrow_upward_rounded),
+                label: Text(_busy ? 'Публикую...' : 'Опубликовать заявку'),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(22),
+                  ),
+                ),
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            value: _helpersNeeded,
-            items: const [
-              DropdownMenuItem(value: 1, child: Text('1 помощник')),
-              DropdownMenuItem(value: 2, child: Text('2 помощника')),
-              DropdownMenuItem(value: 3, child: Text('3 помощника')),
-              DropdownMenuItem(value: 4, child: Text('4 помощника')),
-              DropdownMenuItem(value: 5, child: Text('5 помощников')),
-            ],
-            onChanged: (v) => setState(() => _helpersNeeded = v ?? 1),
-            decoration: const InputDecoration(
-              labelText: 'Сколько помощников нужно',
-            ),
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            value: _hoursToLive,
-            items: const [
-              DropdownMenuItem(value: 1, child: Text('1 час')),
-              DropdownMenuItem(value: 2, child: Text('2 часа')),
-              DropdownMenuItem(value: 3, child: Text('3 часа')),
-              DropdownMenuItem(value: 6, child: Text('6 часов')),
-              DropdownMenuItem(value: 12, child: Text('12 часов')),
-              DropdownMenuItem(value: 24, child: Text('1 день')),
-            ],
-            onChanged: (v) => setState(() => _hoursToLive = v ?? 24),
-            decoration: const InputDecoration(
-              labelText: 'Сколько держать заявку',
-            ),
-          ),
-          const SizedBox(height: 14),
-          const Text(
-            'Теги',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: kAvailableRequestTags.map((tag) {
-              final selected = _selectedTags.contains(tag);
-              return FilterChip(
-                label: Text(tag),
-                selected: selected,
-                onSelected: (value) {
-                  setState(() {
-                    if (value) {
-                      _selectedTags.add(tag);
-                    } else {
-                      _selectedTags.remove(tag);
-                    }
-                  });
-                },
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: (_hoursToLive <= 3 || _selectedTags.contains('Срочно'))
-                  ? Colors.red.withOpacity(0.08)
-                  : Colors.black.withOpacity(0.04),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              (_hoursToLive <= 3 || _selectedTags.contains('Срочно'))
-                  ? 'Эта заявка будет автоматически помечена как СРОЧНО.'
-                  : 'Обычная заявка.',
-            ),
-          ),
-          const SizedBox(height: 12),
-          FilledButton(
-            onPressed: _busy ? null : _submit,
-            child: _busy
-                ? const LeafSpinner(size: 18, color: Colors.white)
-                : const Text('Опубликовать'),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -8493,10 +8912,6 @@ class EventsScreen extends StatefulWidget {
 
 class _EventsScreenState extends State<EventsScreen> {
   final _imageService = CloudinaryImageService();
-  final capacityCtrl = TextEditingController(text: '20');
-  String selectedEventFormat = 'offline';
-  String selectedRecruitmentStatus = 'open';
-  String selectedCity = kAvailableCities.first;
 
   Future<Map<String, dynamic>?> _loadRole() async {
     final user = FirebaseAuth.instance.currentUser;
@@ -8511,10 +8926,14 @@ class _EventsScreenState extends State<EventsScreen> {
   }
 
   Future<void> _openCreateEventDialog(BuildContext context) async {
+    final me = FirebaseAuth.instance.currentUser;
+    if (me == null) return;
+
     final titleCtrl = TextEditingController();
     final descCtrl = TextEditingController();
     final placeCtrl = TextEditingController();
-    final capacityCtrl = TextEditingController();
+    final capacityCtrl = TextEditingController(text: '20');
+
     String selectedEventFormat = 'offline';
     String selectedRecruitmentStatus = 'open';
     String selectedCity = kAvailableCities.first;
@@ -8523,7 +8942,6 @@ class _EventsScreenState extends State<EventsScreen> {
     bool imageUploading = false;
 
     DateTime startAt = DateTime.now().add(const Duration(days: 1));
-
     bool askFullName = true;
     bool askSchool = false;
     bool askUniversity = false;
@@ -8557,85 +8975,118 @@ class _EventsScreenState extends State<EventsScreen> {
           }
 
           return AlertDialog(
-            title: const Text('Создать ивент'),
+            title: const Text('Новый ивент'),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   TextField(
                     controller: titleCtrl,
-                    decoration: const InputDecoration(labelText: 'Название'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: placeCtrl,
-                    decoration: const InputDecoration(labelText: 'Место'),
+                    decoration: const InputDecoration(
+                      labelText: 'Название',
+                      prefixIcon: Icon(Icons.event_rounded),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: descCtrl,
                     maxLines: 4,
-                    decoration: const InputDecoration(labelText: 'Описание'),
+                    decoration: const InputDecoration(
+                      labelText: 'Описание',
+                      prefixIcon: Icon(Icons.notes_rounded),
+                      alignLabelWithHint: true,
+                    ),
                   ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: placeCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Место',
+                      prefixIcon: Icon(Icons.place_outlined),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: selectedCity,
+                    decoration: const InputDecoration(
+                      labelText: 'Город',
+                      prefixIcon: Icon(Icons.location_city_rounded),
+                    ),
+                    items: kAvailableCities.map((city) {
+                      return DropdownMenuItem(
+                        value: city,
+                        child: Text(city),
+                      );
+                    }).toList(),
+                    onChanged: (v) {
+                      if (v != null) {
+                        setLocal(() => selectedCity = v);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: selectedEventFormat,
+                    decoration: const InputDecoration(
+                      labelText: 'Формат',
+                      prefixIcon: Icon(Icons.tune_rounded),
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'offline',
+                        child: Text('Офлайн'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'online',
+                        child: Text('Онлайн'),
+                      ),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) {
+                        setLocal(() => selectedEventFormat = v);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: selectedRecruitmentStatus,
+                    decoration: const InputDecoration(
+                      labelText: 'Статус набора',
+                      prefixIcon: Icon(Icons.flag_outlined),
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'open',
+                        child: Text('Набор открыт'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'in_progress',
+                        child: Text('В процессе'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'closed',
+                        child: Text('Набор закрыт'),
+                      ),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) {
+                        setLocal(() => selectedRecruitmentStatus = v);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
                   TextField(
                     controller: capacityCtrl,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
                       labelText: 'Лимит мест',
-                      hintText: 'Например 20',
+                      prefixIcon: Icon(Icons.groups_2_rounded),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  DropdownButtonFormField<String>(
-                    value: selectedEventFormat,
-                    decoration: const InputDecoration(labelText: 'Формат ивента'),
-                    items: kEventAttendanceFormats.map((v) {
-                      return DropdownMenuItem(
-                        value: v,
-                        child: Text(getEventFormatLabel(v)),
-                      );
-                    }).toList(),
-                    onChanged: (v) {
-                      if (v != null) setLocal(() => selectedEventFormat = v);
-                    },
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  DropdownButtonFormField<String>(
-                    value: selectedRecruitmentStatus,
-                    decoration: const InputDecoration(labelText: 'Статус набора'),
-                    items: kEventRecruitmentStatuses.map((v) {
-                      return DropdownMenuItem(
-                        value: v,
-                        child: Text(getEventRecruitmentLabel(v)),
-                      );
-                    }).toList(),
-                    onChanged: (v) {
-                      if (v != null) setLocal(() => selectedRecruitmentStatus = v);
-                    },
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  DropdownButtonFormField<String>(
-                    value: selectedCity,
-                    decoration: const InputDecoration(labelText: 'Город'),
-                    items: kAvailableCities.map((v) {
-                      return DropdownMenuItem(
-                        value: v,
-                        child: Text(v),
-                      );
-                    }).toList(),
-                    onChanged: (v) {
-                      if (v != null) setLocal(() => selectedCity = v);
-                    },
                   ),
                   const SizedBox(height: 12),
                   if (imageUrl.isNotEmpty)
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(18),
                       child: Image.network(
                         imageUrl,
                         height: 160,
@@ -8675,11 +9126,12 @@ class _EventsScreenState extends State<EventsScreen> {
                   ),
                   CheckboxListTile(
                     value: askUniversity,
-                    onChanged: (v) => setLocal(() => askUniversity = v ?? false),
+                    onChanged: (v) =>
+                        setLocal(() => askUniversity = v ?? false),
                     title: const Text('Спрашивать университет'),
                     contentPadding: EdgeInsets.zero,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.schedule),
@@ -8688,7 +9140,8 @@ class _EventsScreenState extends State<EventsScreen> {
                       onPressed: () async {
                         final date = await showDatePicker(
                           context: context,
-                          firstDate: DateTime.now(),
+                          firstDate:
+                              DateTime.now().subtract(const Duration(days: 1)),
                           lastDate: DateTime.now().add(const Duration(days: 365)),
                           initialDate: startAt,
                         );
@@ -8718,11 +9171,11 @@ class _EventsScreenState extends State<EventsScreen> {
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(context, false),
+                onPressed: () => Navigator.of(context).pop(false),
                 child: const Text('Отмена'),
               ),
               FilledButton(
-                onPressed: () => Navigator.pop(context, true),
+                onPressed: () => Navigator.of(context).pop(true),
                 child: const Text('Создать'),
               ),
             ],
@@ -8734,149 +9187,175 @@ class _EventsScreenState extends State<EventsScreen> {
     if (ok != true) return;
 
     if (titleCtrl.text.trim().isEmpty || descCtrl.text.trim().isEmpty) {
+      if (!context.mounted) return;
       AppNotice.show(
         context,
-        message: 'Заполни название и описание ивента',
+        message: 'Заполни название и описание',
         type: AppNoticeType.error,
       );
       return;
     }
 
-    final user = FirebaseAuth.instance.currentUser!;
-    final roleSnap = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .get();
-    final role = (roleSnap.data()?['role'] ?? 'user').toString();
+    try {
+      await FirebaseFirestore.instance.collection('events').add({
+        'title': titleCtrl.text.trim(),
+        'description': descCtrl.text.trim(),
+        'place': placeCtrl.text.trim(),
+        'city': selectedCity,
+        'eventFormat': selectedEventFormat,
+        'recruitmentStatus': selectedRecruitmentStatus,
+        'capacity': int.tryParse(capacityCtrl.text.trim()) ?? 0,
+        'imageUrl': imageUrl,
+        'startAt': Timestamp.fromDate(startAt),
+        'askFullName': askFullName,
+        'askSchool': askSchool,
+        'askUniversity': askUniversity,
+        'createdBy': me.uid,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
 
-    if (!canCreateEventsByRole(role)) {
+      if (!context.mounted) return;
       AppNotice.show(
         context,
-        message: 'Только организатор, модератор или админ может создавать ивенты',
+        message: 'Ивент создан',
+        type: AppNoticeType.success,
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      AppNotice.show(
+        context,
+        message: 'Ошибка создания ивента: $e',
         type: AppNoticeType.error,
       );
-      return;
     }
-
-    await FirebaseFirestore.instance.collection('events').add({
-      'title': titleCtrl.text.trim(),
-      'description': descCtrl.text.trim(),
-      'imageUrl': imageUrl,
-      'place': placeCtrl.text.trim(),
-      'startAt': Timestamp.fromDate(startAt),
-      'isActive': true,
-      'askFullName': askFullName,
-      'askSchool': askSchool,
-      'askUniversity': askUniversity,
-      'createdBy': user.uid,
-      'createdByRole': role,
-      'createdAt': FieldValue.serverTimestamp(),
-      'capacity': int.tryParse(capacityCtrl.text.trim()) ?? 0,
-      'eventFormat': selectedEventFormat,
-      'recruitmentStatus': selectedRecruitmentStatus,
-      'city': selectedCity,
-    });
-
-    if (!context.mounted) return;
-    AppNotice.show(
-      context,
-      message: 'Ивент создан',
-      type: AppNoticeType.success,
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final stream = FirebaseFirestore.instance
-        .collection('events')
-        .where('isActive', isEqualTo: true)
-        .snapshots();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final pageBg = isDark ? const Color(0xFF0D1511) : const Color(0xFFF5F8F2);
 
-    return FutureBuilder<Map<String, dynamic>?>(
-      future: _loadRole(),
-      builder: (context, roleSnap) {
-        final role = (roleSnap.data?['role'] ?? 'user').toString();
-        final canCreate = canCreateEventsByRole(role);
-        final canSeeReports = canSeeReportsByRole(role);
+    return Scaffold(
+      backgroundColor: pageBg,
+      body: SafeArea(
+        child: FutureBuilder<Map<String, dynamic>?>(
+          future: _loadRole(),
+          builder: (context, roleSnap) {
+            final roleData = roleSnap.data ?? {};
+            final role = (roleData['role'] ?? 'user').toString();
+            final canCreate = canCreateEventsByRole(role);
 
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            return Column(
               children: [
-                Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        'Ивенты',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                    if (canSeeReports)
-                      OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const AdminReportsScreen(),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.flag_outlined),
-                        label: const Text('Жалобы'),
-                      ),
-                    if (canCreate) ...[
-                      const SizedBox(width: 8),
-                      FilledButton.icon(
-                        onPressed: () => _openCreateEventDialog(context),
-                        icon: const Icon(Icons.add),
-                        label: const Text('Создать'),
-                      ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: _AppPageHeroHeader(
+                    title: 'Ивенты',
+                    subtitle:
+                        'Мероприятия, регистрации и общий движ внутри приложения.',
+                    icon: Icons.event_rounded,
+                    gradient: const [
+                      Color(0xFF0F172A),
+                      Color(0xFF1D3557),
+                      Color(0xFF2A6F97),
                     ],
-                  ],
+                    onBack: () => Navigator.of(context).pop(),
+                    trailing: canCreate
+                        ? FilledButton.icon(
+                            onPressed: () => _openCreateEventDialog(context),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: const Color(0xFF0F172A),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                            ),
+                            icon: const Icon(Icons.add_rounded),
+                            label: const Text('Создать'),
+                          )
+                        : null,
+                  ),
                 ),
                 const SizedBox(height: 14),
                 Expanded(
                   child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                    stream: stream,
+                    stream: FirebaseFirestore.instance
+                        .collection('events')
+                        .orderBy('startAt')
+                        .snapshots(),
                     builder: (context, snap) {
-                      if (snap.connectionState == ConnectionState.waiting) {
+                      if (snap.hasError) {
+                        return Center(
+                          child: Text('Ошибка загрузки: ${snap.error}'),
+                        );
+                      }
+
+                      if (!snap.hasData) {
                         return const Center(child: LeafSpinner(size: 30));
                       }
 
-                      if (snap.hasError) {
-                        return Center(
-                          child: Text('Ошибка загрузки ивентов: ${snap.error}'),
+                      final docs = snap.data!.docs;
+
+                      if (docs.isEmpty) {
+                        return ListView(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(22),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).cardColor,
+                                borderRadius: BorderRadius.circular(28),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Color(0x12000000),
+                                    blurRadius: 18,
+                                    offset: Offset(0, 8),
+                                  ),
+                                ],
+                              ),
+                              child: const Column(
+                                children: [
+                                  Icon(
+                                    Icons.event_busy_outlined,
+                                    size: 46,
+                                    color: Color(0xFF94A3B8),
+                                  ),
+                                  SizedBox(height: 12),
+                                  Text(
+                                    'Пока что нет новых ивентов',
+                                    style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  SizedBox(height: 8),
+                                  Text(
+                                    'Когда появятся новые мероприятия, они будут показаны здесь.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      height: 1.45,
+                                      color: Color(0xFF64748B),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         );
                       }
-
-                      if (!snap.hasData || snap.data!.docs.isEmpty) {
-                        return const Center(
-                          child: Text('Пока что нет новых ивентов'),
-                        );
-                      }
-
-                      final docs = snap.data!.docs.toList();
-
-                      docs.sort((a, b) {
-                        final aTs = a.data()['startAt'] as Timestamp?;
-                        final bTs = b.data()['startAt'] as Timestamp?;
-                        final aDate = aTs?.toDate() ?? DateTime(2100);
-                        final bDate = bTs?.toDate() ?? DateTime(2100);
-                        return aDate.compareTo(bDate);
-                      });
 
                       return ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                         itemCount: docs.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 16),
+                        separatorBuilder: (_, __) => const SizedBox(height: 14),
                         itemBuilder: (context, i) {
                           final doc = docs[i];
+                          final data = doc.data();
+
                           return EventBigCard(
                             eventId: doc.id,
-                            data: doc.data(),
+                            data: data,
                           );
                         },
                       );
@@ -8884,10 +9363,10 @@ class _EventsScreenState extends State<EventsScreen> {
                   ),
                 ),
               ],
-            ),
-          ),
-        );
-      },
+            );
+          },
+        ),
+      ),
     );
   }
 }
