@@ -5277,52 +5277,35 @@ class _MainShellState extends State<MainShell> {
                   children: _pages,
                 ),
               ),
-
               Positioned(
                 top: 14,
                 right: 14,
                 child: SafeArea(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? Colors.white.withOpacity(0.08)
-                          : Colors.white.withOpacity(0.84),
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(
-                        color: isDark
-                            ? Colors.white.withOpacity(0.06)
-                            : Colors.black.withOpacity(0.05),
-                      ),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Color(0x12000000),
-                          blurRadius: 16,
-                          offset: Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: IconButton(
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => SettingsScreen(
-                              isDarkMode: widget.settings.isDarkMode,
-                              onThemeChanged: (value) async {
-                                await widget.settings.setDarkMode(value);
-                                if (mounted) setState(() {});
-                              },
-                              selectedCity: _selectedCity,
-                              onCityChanged: _changeCity,
-                            ),
+                  child: IconButton(
+                    tooltip: 'Настройки',
+                    splashRadius: 22,
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => SettingsScreen(
+                            isDarkMode: widget.settings.isDarkMode,
+                            onThemeChanged: (value) async {
+                              await widget.settings.setDarkMode(value);
+                              if (mounted) setState(() {});
+                            },
+                            selectedCity: _selectedCity,
+                            onCityChanged: _changeCity,
                           ),
-                        );
-                      },
-                      icon: const Icon(Icons.settings_outlined),
+                        ),
+                      );
+                    },
+                    icon: Icon(
+                      Icons.settings_outlined,
+                      color: isDark ? Colors.white : const Color(0xFF111827),
                     ),
                   ),
                 ),
               ),
-
               Positioned(
                 left: 0,
                 right: 0,
@@ -5407,7 +5390,15 @@ class _MainShellState extends State<MainShell> {
                               onOpenOrganizers: () {
                                 Navigator.of(context).push(
                                   MaterialPageRoute(
-                                    builder: (_) => const OrganizersScreen(),
+                                    builder: (_) =>
+                                        const OrganizersScreen(),
+                                  ),
+                                );
+                              },
+                              onOpenRequests: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => const RequestsHubPage(),
                                   ),
                                 );
                               },
@@ -5457,9 +5448,7 @@ class _BottomNavItem extends StatelessWidget {
         curve: Curves.easeOut,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: active
-              ? activeColor.withOpacity(0.14)
-              : Colors.transparent,
+          color: active ? activeColor.withOpacity(0.14) : Colors.transparent,
           borderRadius: BorderRadius.circular(18),
         ),
         child: Column(
@@ -5877,64 +5866,60 @@ class _RequestDocCardState extends State<RequestDocCard> {
   Future<void> _help() async {
     if (_opening) return;
 
-    final me = FirebaseAuth.instance.currentUser!;
+    final me = FirebaseAuth.instance.currentUser;
+    if (me == null) return;
+
     setState(() => _opening = true);
 
     try {
-      final requestRef = FirebaseFirestore.instance
-          .collection('requests')
-          .doc(widget.requestId);
+      final db = FirebaseFirestore.instance;
+      final requestRef = db.collection('requests').doc(widget.requestId);
 
-      String finalChatId = '';
-      String ownerIdForNotification = '';
-      String helperNameForNotification = 'Волонтёр';
+      String chatId = '';
 
-      await FirebaseFirestore.instance.runTransaction((tx) async {
+      await db.runTransaction((tx) async {
         final requestSnap = await tx.get(requestRef);
-        final requestData = requestSnap.data();
 
-        if (requestData == null) {
+        if (!requestSnap.exists) {
           throw Exception('Заявка не найдена');
         }
 
-        final status = (requestData['status'] ?? '').toString();
-        final authorId = (requestData['authorId'] ?? '').toString();
-        final helpersNeeded = (requestData['helpersNeeded'] is num)
-            ? (requestData['helpersNeeded'] as num).toInt()
-            : 1;
-        final acceptedHelpers =
-            List<String>.from(requestData['acceptedHelpers'] ?? []);
-        final existingChatId = (requestData['chatId'] ?? '').toString();
+        final data = requestSnap.data() as Map<String, dynamic>;
 
-        ownerIdForNotification = authorId;
+        final authorId = (data['authorId'] ?? '').toString();
+        final status = (data['status'] ?? 'open').toString();
+        final helpersNeeded = (data['helpersNeeded'] is num)
+            ? (data['helpersNeeded'] as num).toInt()
+            : 1;
+        final acceptedHelpers = List<String>.from(data['acceptedHelpers'] ?? []);
+        final existingChatId = (data['chatId'] ?? '').toString();
 
         if (authorId == me.uid) {
           throw Exception('Нельзя откликнуться на свою заявку');
         }
 
         if (status == 'done' || status == 'cancelled' || status == 'expired') {
-          throw Exception('Эта заявка уже закрыта');
+          throw Exception('Заявка уже закрыта');
         }
 
         if (acceptedHelpers.contains(me.uid)) {
           if (existingChatId.isNotEmpty) {
-            finalChatId = existingChatId;
+            chatId = existingChatId;
             return;
           }
-          throw Exception('Ты уже откликнулся на эту заявку');
         }
 
-        if (acceptedHelpers.length >= helpersNeeded) {
+        if (acceptedHelpers.length >= helpersNeeded &&
+            !acceptedHelpers.contains(me.uid)) {
           throw Exception('Нужное количество помощников уже набрано');
         }
 
-        final newAcceptedHelpers = [...acceptedHelpers, me.uid];
-        final newAcceptedCount = newAcceptedHelpers.length;
+        final updatedHelpers = acceptedHelpers.contains(me.uid)
+            ? acceptedHelpers
+            : [...acceptedHelpers, me.uid];
 
-        String chatId = existingChatId;
-
-        if (chatId.isEmpty) {
-          final chatRef = FirebaseFirestore.instance.collection('chats').doc();
+        if (existingChatId.isEmpty) {
+          final chatRef = db.collection('chats').doc();
           chatId = chatRef.id;
 
           tx.set(chatRef, {
@@ -5942,7 +5927,7 @@ class _RequestDocCardState extends State<RequestDocCard> {
             'requestId': widget.requestId,
             'requestTitle': widget.title,
             'requestCategory': widget.category,
-            'members': [authorId, ...newAcceptedHelpers],
+            'members': [authorId, ...updatedHelpers],
             'createdAt': FieldValue.serverTimestamp(),
             'updatedAt': FieldValue.serverTimestamp(),
             'lastMessage': 'Чат создан',
@@ -5958,7 +5943,9 @@ class _RequestDocCardState extends State<RequestDocCard> {
             'deletedForAll': false,
           });
         } else {
-          final chatRef = FirebaseFirestore.instance.collection('chats').doc(chatId);
+          chatId = existingChatId;
+
+          final chatRef = db.collection('chats').doc(existingChatId);
           tx.set(chatRef, {
             'members': FieldValue.arrayUnion([me.uid]),
             'updatedAt': FieldValue.serverTimestamp(),
@@ -5968,56 +5955,19 @@ class _RequestDocCardState extends State<RequestDocCard> {
         tx.set(requestRef, {
           'chatId': chatId,
           'status': 'in_chat',
-          'acceptedHelpers': newAcceptedHelpers,
-          'acceptedHelpersCount': newAcceptedCount,
-          'acceptedBy': acceptedHelpers.isEmpty ? me.uid : requestData['acceptedBy'],
+          'acceptedHelpers': updatedHelpers,
+          'acceptedHelpersCount': updatedHelpers.length,
+          'acceptedBy': updatedHelpers.isNotEmpty ? updatedHelpers.first : me.uid,
           'acceptedAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
-
-        finalChatId = chatId;
       });
 
-      try {
-        final meSnap = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(me.uid)
-            .get();
-
-        helperNameForNotification =
-            (meSnap.data()?['name'] ?? 'Волонтёр').toString().trim();
-
-        if (helperNameForNotification.isEmpty) {
-          helperNameForNotification = 'Волонтёр';
-        }
-      } catch (_) {}
-
-      if (ownerIdForNotification.isNotEmpty && ownerIdForNotification != me.uid) {
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(ownerIdForNotification)
-            .collection('notifications')
-            .add({
-          'type': 'helper_joined_request',
-          'text': '$helperNameForNotification откликнулся на твою заявку "${widget.title}"',
-          'requestId': widget.requestId,
-          'chatId': finalChatId,
-          'createdAt': FieldValue.serverTimestamp(),
-          'seen': false,
-        });
+      if (chatId.isEmpty) {
+        throw Exception('Чат не создался');
       }
 
-      if (!mounted) return;
-
-      if (finalChatId.isEmpty) {
-        AppNotice.show(
-          context,
-          message: 'Не удалось открыть чат',
-          type: AppNoticeType.error,
-        );
-        return;
-      }
-
-      await FirebaseFirestore.instance.collection('users').doc(me.uid).set({
+      await db.collection('users').doc(me.uid).set({
         'volunteerAcceptedCount': FieldValue.increment(1),
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
@@ -6027,7 +5977,7 @@ class _RequestDocCardState extends State<RequestDocCard> {
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => ChatScreen(
-            chatId: finalChatId,
+            chatId: chatId,
             title: widget.title,
           ),
         ),
@@ -6096,7 +6046,12 @@ class _RequestDocCardState extends State<RequestDocCard> {
               ),
             ),
             Padding(
-              padding: EdgeInsets.fromLTRB(isMobile ? 10 : 16, isMobile ? 10 : 16, isMobile ? 10 : 16, isMobile ? 6 : 16),
+              padding: EdgeInsets.fromLTRB(
+                isMobile ? 10 : 16,
+                isMobile ? 10 : 16,
+                isMobile ? 10 : 16,
+                isMobile ? 6 : 16,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -6201,7 +6156,9 @@ class _RequestDocCardState extends State<RequestDocCard> {
                           vertical: isMobile ? 12 : 16,
                         ),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(isMobile ? 14 : 18),
+                          borderRadius: BorderRadius.circular(
+                            isMobile ? 14 : 18,
+                          ),
                         ),
                       ),
                       icon: _opening
@@ -6620,12 +6577,14 @@ class QuickActionsMenuButton extends StatefulWidget {
   final VoidCallback onOpenEvents;
   final VoidCallback onOpenCreateRequest;
   final VoidCallback onOpenOrganizers;
+  final VoidCallback onOpenRequests;
 
   const QuickActionsMenuButton({
     super.key,
     required this.onOpenEvents,
     required this.onOpenCreateRequest,
     required this.onOpenOrganizers,
+    required this.onOpenRequests,
   });
 
   @override
@@ -6685,7 +6644,7 @@ class _QuickActionsMenuButtonState extends State<QuickActionsMenuButton>
             CompositedTransformFollower(
               link: _link,
               showWhenUnlinked: false,
-              offset: const Offset(-110, -232),
+              offset: const Offset(-110, -288),
               child: AnimatedBuilder(
                 animation: _curve,
                 builder: (_, __) {
@@ -6733,6 +6692,19 @@ class _QuickActionsMenuButtonState extends State<QuickActionsMenuButton>
                                   },
                                 ),
                                 _QuickActionTile(
+                                  icon: Icons.list_alt_rounded,
+                                  iconBg: const Color(0xFFE8ECFF),
+                                  iconColor: const Color(0xFF2643A2),
+                                  title: 'Заявки',
+                                  subtitle: 'Мои активные заявки и чаты',
+                                  textColor: textColor,
+                                  subColor: subColor,
+                                  onTap: () {
+                                    _close();
+                                    widget.onOpenRequests();
+                                  },
+                                ),
+                                _QuickActionTile(
                                   icon: Icons.event_rounded,
                                   iconBg: const Color(0xFFDDF1FF),
                                   iconColor: const Color(0xFF124B75),
@@ -6750,7 +6722,7 @@ class _QuickActionsMenuButtonState extends State<QuickActionsMenuButton>
                                   iconBg: const Color(0xFFFFEDD4),
                                   iconColor: const Color(0xFF8A4B00),
                                   title: 'Организаторы',
-                                  subtitle: 'Кто проводит ивенты',
+                                  subtitle: 'Кто создаёт ивенты',
                                   textColor: textColor,
                                   subColor: subColor,
                                   onTap: () {
@@ -7029,11 +7001,245 @@ class _QuickActionTile extends StatelessWidget {
 class PrivacyPolicyScreen extends StatelessWidget {
   const PrivacyPolicyScreen({super.key});
 
+  static const String _policyText = '''
+Политика конфиденциальности приложения «Volunteer Match»
+
+1. Общие положения
+
+1.1. Настоящая Политика конфиденциальности определяет порядок сбора, обработки, хранения, использования и защиты персональных данных пользователей мобильного приложения и веб-версии «Volunteer Match» (далее — Приложение, Сервис).
+
+1.2. Используя Приложение, проходя регистрацию, вход, создавая заявку, участвуя в ивентах, отправляя сообщения, загружая фотографии или иным образом пользуясь функционалом Сервиса, пользователь подтверждает, что ознакомился с настоящей Политикой и соглашается с её условиями.
+
+1.3. Политика распространяется на все данные, которые могут быть получены о пользователе при использовании Сервиса.
+
+1.4. Администрация Сервиса принимает разумные технические и организационные меры для защиты персональных данных от утраты, неправомерного доступа, изменения, раскрытия или уничтожения.
+
+1.5. Настоящая Политика применяется в дополнение к пользовательскому соглашению и иным правилам Сервиса.
+
+2. Термины и определения
+
+2.1. Персональные данные — любая информация, относящаяся прямо или косвенно к определённому или определяемому пользователю.
+
+2.2. Обработка персональных данных — любые действия с персональными данными, включая сбор, запись, систематизацию, накопление, хранение, уточнение, использование, передачу, обезличивание, блокирование и удаление.
+
+2.3. Пользователь — физическое лицо, использующее Приложение.
+
+2.4. Администрация Сервиса — лицо или команда, обеспечивающая функционирование Приложения, его техническую поддержку, развитие и администрирование.
+
+3. Какие данные мы собираем
+
+3.1. Данные, предоставляемые пользователем при регистрации и использовании аккаунта:
+- адрес электронной почты;
+- пароль в зашифрованном/технически защищённом виде через используемый сервис авторизации;
+- имя, никнейм или отображаемое имя;
+- UID / технический идентификатор пользователя;
+- фотография профиля (аватар), если пользователь её загружает;
+- фон профиля, если пользователь его загружает;
+- сведения «О себе», биография, описание профиля;
+- сведения о городе пользователя.
+
+3.2. Данные, создаваемые пользователем в процессе использования Сервиса:
+- тексты заявок;
+- описания просьб о помощи;
+- категория заявки;
+- выбранные теги;
+- срок действия заявки;
+- количество требуемых помощников;
+- статусы заявок;
+- регистрационные данные для участия в ивентах;
+- сообщения в чатах;
+- отзывы, оценки, рейтинг;
+- жалобы, обращения и комментарии.
+
+3.3. Данные об участии в мероприятиях:
+- факт регистрации на ивент;
+- имя и фамилия, если это требуется организатором;
+- школа или университет, если это требуется организатором;
+- выбранный формат участия и связанные с этим сведения;
+- участие в чате ивента.
+
+3.4. Технические и автоматически собираемые данные:
+- дата и время входа;
+- сведения об устройстве и браузере;
+- IP-адрес и user-agent;
+- технические журналы, необходимые для обеспечения безопасности, стабильной работы и предотвращения злоупотреблений;
+- данные о сессии и авторизации.
+
+3.5. При использовании отдельных функций могут обрабатываться:
+- данные геолокации или выбранного города;
+- изображения, загруженные пользователем;
+- данные, связанные с уведомлениями внутри Сервиса.
+
+4. Цели обработки персональных данных
+
+4.1. Персональные данные обрабатываются в следующих целях:
+- регистрация и авторизация пользователя в Сервисе;
+- предоставление доступа к функциям Приложения;
+- создание и отображение пользовательского профиля;
+- публикация, изменение и закрытие заявок;
+- организация взаимодействия между пользователями;
+- работа личных и групповых чатов;
+- регистрация и участие в ивентах;
+- отображение участников, организаторов и модераторов;
+- расчёт рейтинга, количества откликов, достижений и статистики;
+- обработка жалоб, обращений и модерация контента;
+- обеспечение безопасности аккаунтов и предотвращение злоупотреблений;
+- выполнение требований законодательства;
+- анализ и улучшение качества работы Сервиса.
+
+5. Правовые основания обработки данных
+
+5.1. Обработка персональных данных осуществляется на основании:
+- согласия пользователя на обработку его персональных данных;
+- необходимости исполнения пользовательского соглашения и предоставления функционала Сервиса;
+- необходимости обеспечения безопасности, работы и администрирования Приложения;
+- иных оснований, предусмотренных применимым законодательством.
+
+6. Как используются данные внутри Сервиса
+
+6.1. Отдельные сведения пользователя могут быть доступны другим пользователям в рамках логики Приложения. Например:
+- имя или ник;
+- фотография профиля;
+- рейтинг, отзывы, достижения;
+- текст заявок и связанные с ними данные;
+- участие в ивентах;
+- сообщения в чатах;
+- профиль пользователя в публичной части приложения, если такой функционал предусмотрен.
+
+6.2. При отклике на заявку, регистрации на ивент или использовании чата некоторые данные становятся доступными другим участникам соответствующего взаимодействия в том объёме, который необходим для работы функции.
+
+6.3. Жалобы, обращения и служебная информация могут быть доступны только администраторам, модераторам или иным уполномоченным лицам Сервиса.
+
+7. Используемые сервисы и инфраструктура
+
+7.1. Для обеспечения работы Приложения могут использоваться сторонние технологические платформы и облачные сервисы, в том числе сервисы аутентификации, базы данных, хостинга, хранения медиафайлов и доставки контента.
+
+7.2. В частности, в приложении могут использоваться сервисы экосистемы Firebase / Google, включая:
+- Firebase Authentication;
+- Cloud Firestore;
+- Firebase Hosting;
+- иные сервисы Firebase или Google, необходимые для корректной работы Сервиса.
+
+7.3. Для загрузки и хранения изображений, фотографий профиля, фоновых изображений и изображений ивентов могут применяться сторонние облачные сервисы обработки и хранения изображений.
+
+7.4. Пользователь понимает и соглашается, что часть данных может обрабатываться соответствующими технологическими провайдерами в рамках предоставления инфраструктуры Сервиса.
+
+8. Хранение и срок обработки данных
+
+8.1. Персональные данные хранятся не дольше, чем это необходимо для достижения целей обработки, если иной срок не предусмотрен законодательством или внутренними правилами Сервиса.
+
+8.2. Данные могут храниться:
+- до удаления аккаунта пользователем;
+- до достижения цели обработки;
+- в течение срока, необходимого для рассмотрения жалоб, претензий и обеспечения безопасности;
+- в течение срока, требуемого законом или разумно необходимого для защиты прав Сервиса.
+
+8.3. Даже после удаления отдельных данных некоторые обезличенные, архивные или технические записи могут временно сохраняться в резервных копиях, журналах безопасности и служебных логах.
+
+9. Передача данных третьим лицам
+
+9.1. Администрация Сервиса не продаёт персональные данные пользователей третьим лицам.
+
+9.2. Передача данных может осуществляться:
+- подрядчикам и технологическим провайдерам, обеспечивающим работу Сервиса;
+- в случаях, прямо предусмотренных законодательством;
+- при защите прав и законных интересов Сервиса, пользователей или третьих лиц;
+- по запросу уполномоченных государственных органов в случаях, предусмотренных законом.
+
+9.3. В случае использования зарубежной облачной инфраструктуры данные могут обрабатываться или храниться на серверах за пределами страны пользователя в рамках работы соответствующих сервисов.
+
+10. Защита персональных данных
+
+10.1. Для защиты данных используются организационные и технические меры, включая:
+- ограничение доступа к данным;
+- аутентификацию и разграничение прав доступа;
+- применение правил безопасности к базе данных;
+- использование защищённых каналов связи;
+- мониторинг технических ошибок и злоупотреблений;
+- управление сессиями и авторизацией.
+
+10.2. Несмотря на принимаемые меры, ни один способ передачи данных через интернет и ни одна система хранения не могут гарантировать абсолютную безопасность.
+
+11. Права пользователя
+
+11.1. Пользователь вправе:
+- знать о наличии, составе и способах обработки своих персональных данных;
+- требовать уточнения, обновления или исправления своих данных;
+- удалять или изменять часть сведений через доступный функционал приложения;
+- отозвать согласие на обработку персональных данных, если иное не препятствует исполнению обязательств или не противоречит закону;
+- обращаться к администрации Сервиса по вопросам, связанным с обработкой данных;
+- требовать удаления аккаунта и связанных с ним данных в разумных пределах, если иное не требуется по закону или для защиты прав Сервиса.
+
+11.2. Некоторые данные не могут быть немедленно удалены, если они:
+- являются частью уже совершённых действий внутри системы;
+- необходимы для безопасности, разрешения споров или предотвращения мошенничества;
+- должны храниться в силу закона;
+- входят в резервные копии или технические журналы.
+
+12. Данные несовершеннолетних
+
+12.1. Пользователь, не достигший возраста, с которого он вправе самостоятельно давать юридически значимое согласие в соответствии с применимым правом, должен использовать Сервис с согласия законного представителя.
+
+12.2. Если администрации станет известно о неправомерном предоставлении данных несовершеннолетнего без необходимых оснований, такие данные могут быть ограничены, удалены или заблокированы.
+
+13. Контент, создаваемый пользователем
+
+13.1. Пользователь самостоятельно несёт ответственность за достоверность, законность и корректность информации, размещаемой в профиле, заявках, ивентах, чатах, отзывах и жалобах.
+
+13.2. Пользователь обязуется не размещать:
+- ложные сведения;
+- чужие персональные данные без законных оснований;
+- оскорбления, угрозы, дискриминационный контент;
+- незаконный, вредоносный или запрещённый контент.
+
+13.3. Администрация вправе удалять такой контент, ограничивать доступ к нему, блокировать пользователя и использовать соответствующие данные для рассмотрения жалоб и обеспечения безопасности.
+
+14. Cookies, локальное хранение и сессии
+
+14.1. В веб-версии Сервиса могут использоваться cookie, local storage, session storage и иные механизмы хранения данных, необходимые для:
+- сохранения входа пользователя;
+- поддержания сессии;
+- хранения технических настроек;
+- улучшения удобства использования;
+- защиты от злоупотреблений и ошибок.
+
+14.2. Отключение таких механизмов в браузере может привести к ограничению функциональности Сервиса.
+
+15. Изменение Политики
+
+15.1. Администрация Сервиса вправе в любое время вносить изменения в настоящую Политику.
+
+15.2. Новая редакция Политики вступает в силу с момента её размещения в Приложении или на соответствующей странице, если иное не указано дополнительно.
+
+15.3. Пользователю рекомендуется регулярно просматривать актуальную версию Политики.
+
+16. Контакты и обращения
+
+16.1. По вопросам, связанным с обработкой персональных данных, пользователь может обратиться к администрации Сервиса через доступные внутри приложения способы связи либо по контактам, указанным в приложении или на официальной странице проекта.
+
+16.2. При обращении пользователь может быть обязан подтвердить, что запрос относится именно к его данным, чтобы предотвратить неправомерный доступ третьих лиц.
+
+17. Заключительные положения
+
+17.1. Настоящая Политика применяется ко всем пользователям Сервиса с момента начала использования Приложения.
+
+17.2. Если отдельные положения Политики будут признаны недействительными, это не влияет на действительность остальных положений.
+
+17.3. Настоящая Политика подлежит применению и толкованию в соответствии с применимым законодательством.
+
+Дата последнего обновления Политики Конфедициальности: 09.04.26
+Наименование владельца / администратора сервиса: dankanal
+Контактный email: volunteermatch1@gmail.com
+Сайт: https://volunteermatchcapp.netlify.app/
+''';
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? const Color(0xFF0B1220) : const Color(0xFFF8FAFC);
     final text = isDark ? Colors.white : const Color(0xFF111827);
+    final sub = isDark ? Colors.white70 : const Color(0xFF6B7280);
+    final card = isDark ? const Color(0xFF111827) : Colors.white;
 
     return Scaffold(
       backgroundColor: bg,
@@ -7041,18 +7247,55 @@ class PrivacyPolicyScreen extends StatelessWidget {
         title: const Text('Privacy Policy'),
         backgroundColor: bg,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Text(
-          'Мы собираем только те данные, которые нужны для работы приложения: профиль пользователя, заявки, чаты, регистрации на ивенты и служебные уведомления.\n\n'
-          'Эти данные используются для того, чтобы пользователи могли помогать друг другу, общаться по заявкам и участвовать в ивентах.\n\n'
-          'Мы не передаём данные третьим лицам вне работы сервиса, кроме случаев, когда это требуется законом или необходимо для технической работы приложения.\n\n'
-          'Используя приложение, ты соглашаешься с обработкой данных, нужных для его работы.',
-          style: TextStyle(
-            fontSize: 16,
-            height: 1.6,
-            color: text,
-          ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: card,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x12000000),
+                    blurRadius: 16,
+                    offset: Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Политика конфиденциальности',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      color: text,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Полная версия для приложения Volunteer Match',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: sub,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  SelectableText(
+                    _policyText,
+                    style: TextStyle(
+                      fontSize: 15,
+                      height: 1.6,
+                      color: text,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -7279,8 +7522,7 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
 
     try {
       final hours = _hoursToLive <= 0 ? 24 : _hoursToLive;
-      final now = DateTime.now();
-      final expiresAt = now.add(Duration(hours: hours));
+      final expiresAt = DateTime.now().add(Duration(hours: hours));
       final autoUrgent = hours <= 3 || _selectedTags.contains('Срочно');
 
       await FirebaseFirestore.instance.collection('requests').add({
@@ -7297,7 +7539,7 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
         'status': 'open',
         'createdAt': FieldValue.serverTimestamp(),
         'expiresAt': Timestamp.fromDate(expiresAt),
-      }).timeout(const Duration(seconds: 10));
+      });
 
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'createdRequestsCount': FieldValue.increment(1),
@@ -7309,24 +7551,15 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
 
       if (!mounted) return;
 
-      final text = achievementText == null
-          ? 'Заявка опубликована'
-          : 'Заявка опубликована\n$achievementText';
-
       AppNotice.show(
         context,
-        message: text,
+        message: achievementText == null
+            ? 'Заявка опубликована'
+            : 'Заявка опубликована\n$achievementText',
         type: AppNoticeType.success,
       );
 
       Navigator.of(context).pop();
-    } on FirebaseException catch (e) {
-      if (!mounted) return;
-      AppNotice.show(
-        context,
-        message: 'Firestore: ${e.code} ${e.message ?? ""}',
-        type: AppNoticeType.error,
-      );
     } catch (e) {
       if (!mounted) return;
       AppNotice.show(
@@ -7342,234 +7575,185 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pageBg = isDark ? const Color(0xFF0D1511) : const Color(0xFFF5F8F2);
 
     return Scaffold(
-      backgroundColor: pageBg,
+      appBar: AppBar(
+        title: const Text('Создать заявку'),
+      ),
       body: SafeArea(
-        child: ListView(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          children: [
-            _AppPageHeroHeader(
-              title: 'Создать заявку',
-              subtitle:
-                  'Оформи просьбу красиво и понятно — так на неё быстрее откликнутся.',
-              icon: Icons.edit_note_rounded,
-              gradient: const [
-                Color(0xFF1B4332),
-                Color(0xFF2D6A4F),
-                Color(0xFF40916C),
-              ],
-              onBack: () => Navigator.of(context).pop(),
-            ),
-            const SizedBox(height: 16),
-
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Theme.of(context).cardColor,
-                borderRadius: BorderRadius.circular(28),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x12000000),
-                    blurRadius: 18,
-                    offset: Offset(0, 8),
-                  ),
-                ],
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Column(
+                  children: [
+                    TextField(
+                      controller: _title,
+                      decoration: const InputDecoration(
+                        labelText: 'Название',
+                        prefixIcon: Icon(Icons.title),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: _category,
+                      items: const [
+                        DropdownMenuItem(value: 'Еда', child: Text('Еда')),
+                        DropdownMenuItem(value: 'Медицина', child: Text('Медицина')),
+                        DropdownMenuItem(value: 'Учёба', child: Text('Учёба')),
+                        DropdownMenuItem(value: 'Техника', child: Text('Техника')),
+                        DropdownMenuItem(value: 'Разговор', child: Text('Разговор')),
+                        DropdownMenuItem(value: 'Животные', child: Text('Животные')),
+                      ],
+                      onChanged: (v) => setState(() => _category = v ?? 'Еда'),
+                      decoration: const InputDecoration(
+                        labelText: 'Категория',
+                        prefixIcon: Icon(Icons.category_outlined),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: _selectedCity,
+                      items: kAvailableCities
+                          .map((city) => DropdownMenuItem(
+                                value: city,
+                                child: Text(city),
+                              ))
+                          .toList(),
+                      onChanged: (v) {
+                        setState(() => _selectedCity = v ?? kAvailableCities.first);
+                      },
+                      decoration: const InputDecoration(
+                        labelText: 'Город',
+                        prefixIcon: Icon(Icons.location_city_outlined),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _desc,
+                      maxLines: 5,
+                      decoration: const InputDecoration(
+                        labelText: 'Описание',
+                        alignLabelWithHint: true,
+                        prefixIcon: Icon(Icons.notes_outlined),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              child: Column(
-                children: [
-                  TextField(
-                    controller: _title,
-                    decoration: const InputDecoration(
-                      labelText: 'Название заявки',
-                      hintText: 'Например: Нужны продукты пожилому человеку',
-                      prefixIcon: Icon(Icons.title_rounded),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _desc,
-                    maxLines: 5,
-                    decoration: const InputDecoration(
-                      labelText: 'Описание',
-                      hintText: 'Коротко объясни, какая помощь нужна',
-                      prefixIcon: Icon(Icons.notes_rounded),
-                      alignLabelWithHint: true,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: _selectedCity,
-                    items: kAvailableCities
-                        .map((city) => DropdownMenuItem(
-                              value: city,
-                              child: Text(city),
-                            ))
-                        .toList(),
-                    onChanged: (v) {
-                      setState(() => _selectedCity = v ?? kAvailableCities.first);
-                    },
-                    decoration: const InputDecoration(
-                      labelText: 'Город',
-                      prefixIcon: Icon(Icons.location_city_rounded),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: _category,
-                    items: const [
-                      DropdownMenuItem(value: 'Еда', child: Text('Еда')),
-                      DropdownMenuItem(value: 'Медицина', child: Text('Медицина')),
-                      DropdownMenuItem(value: 'Учёба', child: Text('Учёба')),
-                      DropdownMenuItem(value: 'Техника', child: Text('Техника')),
-                      DropdownMenuItem(value: 'Разговор', child: Text('Разговор')),
-                      DropdownMenuItem(value: 'Животные', child: Text('Животные')),
-                    ],
-                    onChanged: (v) => setState(() => _category = v ?? 'Еда'),
-                    decoration: const InputDecoration(
-                      labelText: 'Категория',
-                      prefixIcon: Icon(Icons.category_rounded),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: DropdownButtonFormField<int>(
-                          value: _helpersNeeded,
-                          items: const [
-                            DropdownMenuItem(value: 1, child: Text('1')),
-                            DropdownMenuItem(value: 2, child: Text('2')),
-                            DropdownMenuItem(value: 3, child: Text('3')),
-                            DropdownMenuItem(value: 4, child: Text('4')),
-                            DropdownMenuItem(value: 5, child: Text('5')),
-                          ],
-                          onChanged: (v) =>
-                              setState(() => _helpersNeeded = v ?? 1),
-                          decoration: const InputDecoration(
-                            labelText: 'Помощников',
-                            prefixIcon: Icon(Icons.groups_2_rounded),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<int>(
+                            value: _helpersNeeded,
+                            items: const [
+                              DropdownMenuItem(value: 1, child: Text('1')),
+                              DropdownMenuItem(value: 2, child: Text('2')),
+                              DropdownMenuItem(value: 3, child: Text('3')),
+                              DropdownMenuItem(value: 4, child: Text('4')),
+                              DropdownMenuItem(value: 5, child: Text('5')),
+                            ],
+                            onChanged: (v) =>
+                                setState(() => _helpersNeeded = v ?? 1),
+                            decoration: const InputDecoration(
+                              labelText: 'Помощники',
+                              prefixIcon: Icon(Icons.groups_outlined),
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: DropdownButtonFormField<int>(
-                          value: _hoursToLive,
-                          items: const [
-                            DropdownMenuItem(value: 1, child: Text('1 час')),
-                            DropdownMenuItem(value: 2, child: Text('2 часа')),
-                            DropdownMenuItem(value: 3, child: Text('3 часа')),
-                            DropdownMenuItem(value: 6, child: Text('6 часов')),
-                            DropdownMenuItem(value: 12, child: Text('12 часов')),
-                            DropdownMenuItem(value: 24, child: Text('1 день')),
-                          ],
-                          onChanged: (v) =>
-                              setState(() => _hoursToLive = v ?? 24),
-                          decoration: const InputDecoration(
-                            labelText: 'Срок',
-                            prefixIcon: Icon(Icons.schedule_rounded),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: DropdownButtonFormField<int>(
+                            value: _hoursToLive,
+                            items: const [
+                              DropdownMenuItem(value: 1, child: Text('1 ч')),
+                              DropdownMenuItem(value: 2, child: Text('2 ч')),
+                              DropdownMenuItem(value: 3, child: Text('3 ч')),
+                              DropdownMenuItem(value: 6, child: Text('6 ч')),
+                              DropdownMenuItem(value: 12, child: Text('12 ч')),
+                              DropdownMenuItem(value: 24, child: Text('1 день')),
+                            ],
+                            onChanged: (v) =>
+                                setState(() => _hoursToLive = v ?? 24),
+                            decoration: const InputDecoration(
+                              labelText: 'Срок',
+                              prefixIcon: Icon(Icons.schedule_outlined),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Theme.of(context).cardColor,
-                borderRadius: BorderRadius.circular(28),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x12000000),
-                    blurRadius: 18,
-                    offset: Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Теги заявки',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: kAvailableRequestTags.map((tag) {
-                      final selected = _selectedTags.contains(tag);
-                      return FilterChip(
-                        label: Text(tag),
-                        selected: selected,
-                        onSelected: (value) {
-                          setState(() {
-                            if (value) {
-                              _selectedTags.add(tag);
-                            } else {
-                              _selectedTags.remove(tag);
-                            }
-                          });
-                        },
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 14),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: (_hoursToLive <= 3 || _selectedTags.contains('Срочно'))
-                          ? Colors.red.withOpacity(0.08)
-                          : (isDark
-                              ? Colors.white.withOpacity(0.05)
-                              : Colors.black.withOpacity(0.03)),
+                    const SizedBox(height: 14),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Теги',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? Colors.white : const Color(0xFF111827),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: kAvailableRequestTags.map((tag) {
+                        final selected = _selectedTags.contains(tag);
+                        return FilterChip(
+                          label: Text(tag),
+                          selected: selected,
+                          onSelected: (value) {
+                            setState(() {
+                              if (value) {
+                                _selectedTags.add(tag);
+                              } else {
+                                _selectedTags.remove(tag);
+                              }
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _busy ? null : _submit,
+                  icon: _busy
+                      ? const LeafSpinner(size: 18, color: Colors.white)
+                      : const Icon(Icons.send_rounded),
+                  label: Text(_busy ? 'Публикую...' : 'Опубликовать'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(18),
                     ),
-                    child: Text(
-                      (_hoursToLive <= 3 || _selectedTags.contains('Срочно'))
-                          ? 'Эта заявка будет автоматически помечена как срочная.'
-                          : 'Обычная заявка без срочного статуса.',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.white : const Color(0xFF111827),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 18),
-
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: _busy ? null : _submit,
-                icon: _busy
-                    ? const LeafSpinner(size: 18, color: Colors.white)
-                    : const Icon(Icons.arrow_upward_rounded),
-                label: Text(_busy ? 'Публикую...' : 'Опубликовать заявку'),
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 18),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(22),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -7875,18 +8059,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       borderRadius: BorderRadius.circular(22),
                       child: Stack(
                         children: [
-                          if (hasBackground)
-                            Positioned.fill(
-                              child: BackdropFilter(
-                                filter: ImageFilter.blur(
-                                  sigmaX: 3.5,
-                                  sigmaY: 3.5,
-                                ),
-                                child: Container(
-                                  color: Colors.transparent,
-                                ),
-                              ),
-                            ),
                           Positioned.fill(
                             child: Container(
                               decoration: BoxDecoration(
@@ -8099,48 +8271,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 10),
-                  StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                    stream: FirebaseFirestore.instance
-                        .collection('chats')
-                        .where('members', arrayContains: user.uid)
-                        .snapshots(),
-                    builder: (context, chatSnap) {
-                      int totalUnread = 0;
-
-                      if (chatSnap.hasData) {
-                        totalUnread = getTotalUnreadFromChats(
-                          chatSnap.data!.docs,
-                          user.uid,
-                        );
-                      }
-
-                      return SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton(
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const RequestsHubPage(),
-                              ),
-                            );
-                          },
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.list_alt),
-                              const SizedBox(width: 8),
-                              const Text('Заявки'),
-                              if (totalUnread > 0) ...[
-                                const SizedBox(width: 8),
-                                _UnreadBadge(count: totalUnread),
-                              ],
-                            ],
-                          ),
-                        ),
-                      );
-                    },
                   ),
                 ],
               );
@@ -8926,9 +9056,6 @@ class _EventsScreenState extends State<EventsScreen> {
   }
 
   Future<void> _openCreateEventDialog(BuildContext context) async {
-    final me = FirebaseAuth.instance.currentUser;
-    if (me == null) return;
-
     final titleCtrl = TextEditingController();
     final descCtrl = TextEditingController();
     final placeCtrl = TextEditingController();
@@ -8942,6 +9069,7 @@ class _EventsScreenState extends State<EventsScreen> {
     bool imageUploading = false;
 
     DateTime startAt = DateTime.now().add(const Duration(days: 1));
+
     bool askFullName = true;
     bool askSchool = false;
     bool askUniversity = false;
@@ -8955,7 +9083,7 @@ class _EventsScreenState extends State<EventsScreen> {
             try {
               final url = await _imageService.pickAndUploadImage(
                 folder: 'volunteer_match/events',
-                imageQuality: 85,
+                imageQuality: 78,
               );
 
               if (url != null) {
@@ -8984,17 +9112,7 @@ class _EventsScreenState extends State<EventsScreen> {
                     controller: titleCtrl,
                     decoration: const InputDecoration(
                       labelText: 'Название',
-                      prefixIcon: Icon(Icons.event_rounded),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: descCtrl,
-                    maxLines: 4,
-                    decoration: const InputDecoration(
-                      labelText: 'Описание',
-                      prefixIcon: Icon(Icons.notes_rounded),
-                      alignLabelWithHint: true,
+                      prefixIcon: Icon(Icons.event_outlined),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -9010,7 +9128,7 @@ class _EventsScreenState extends State<EventsScreen> {
                     value: selectedCity,
                     decoration: const InputDecoration(
                       labelText: 'Город',
-                      prefixIcon: Icon(Icons.location_city_rounded),
+                      prefixIcon: Icon(Icons.location_city_outlined),
                     ),
                     items: kAvailableCities.map((city) {
                       return DropdownMenuItem(
@@ -9029,7 +9147,7 @@ class _EventsScreenState extends State<EventsScreen> {
                     value: selectedEventFormat,
                     decoration: const InputDecoration(
                       labelText: 'Формат',
-                      prefixIcon: Icon(Icons.tune_rounded),
+                      prefixIcon: Icon(Icons.tune_outlined),
                     ),
                     items: const [
                       DropdownMenuItem(
@@ -9080,18 +9198,42 @@ class _EventsScreenState extends State<EventsScreen> {
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
                       labelText: 'Лимит мест',
-                      prefixIcon: Icon(Icons.groups_2_rounded),
+                      prefixIcon: Icon(Icons.groups_2_outlined),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: descCtrl,
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      labelText: 'Описание',
+                      alignLabelWithHint: true,
+                      prefixIcon: Icon(Icons.notes_outlined),
                     ),
                   ),
                   const SizedBox(height: 12),
                   if (imageUrl.isNotEmpty)
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(18),
+                      borderRadius: BorderRadius.circular(16),
                       child: Image.network(
                         imageUrl,
                         height: 160,
                         width: double.infinity,
                         fit: BoxFit.cover,
+                        filterQuality: FilterQuality.low,
+                        loadingBuilder: (context, child, progress) {
+                          if (progress == null) return child;
+                          return const SizedBox(
+                            height: 160,
+                            child: Center(child: LeafSpinner(size: 20)),
+                          );
+                        },
+                        errorBuilder: (_, __, ___) => const SizedBox(
+                          height: 160,
+                          child: Center(
+                            child: Icon(Icons.broken_image_outlined),
+                          ),
+                        ),
                       ),
                     ),
                   const SizedBox(height: 10),
@@ -9142,7 +9284,8 @@ class _EventsScreenState extends State<EventsScreen> {
                           context: context,
                           firstDate:
                               DateTime.now().subtract(const Duration(days: 1)),
-                          lastDate: DateTime.now().add(const Duration(days: 365)),
+                          lastDate:
+                              DateTime.now().add(const Duration(days: 365)),
                           initialDate: startAt,
                         );
                         if (date == null) return;
@@ -9171,11 +9314,11 @@ class _EventsScreenState extends State<EventsScreen> {
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
+                onPressed: () => Navigator.pop(context, false),
                 child: const Text('Отмена'),
               ),
               FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
+                onPressed: () => Navigator.pop(context, true),
                 child: const Text('Создать'),
               ),
             ],
@@ -9190,183 +9333,211 @@ class _EventsScreenState extends State<EventsScreen> {
       if (!context.mounted) return;
       AppNotice.show(
         context,
-        message: 'Заполни название и описание',
+        message: 'Заполни название и описание ивента',
         type: AppNoticeType.error,
       );
       return;
     }
 
-    try {
-      await FirebaseFirestore.instance.collection('events').add({
-        'title': titleCtrl.text.trim(),
-        'description': descCtrl.text.trim(),
-        'place': placeCtrl.text.trim(),
-        'city': selectedCity,
-        'eventFormat': selectedEventFormat,
-        'recruitmentStatus': selectedRecruitmentStatus,
-        'capacity': int.tryParse(capacityCtrl.text.trim()) ?? 0,
-        'imageUrl': imageUrl,
-        'startAt': Timestamp.fromDate(startAt),
-        'askFullName': askFullName,
-        'askSchool': askSchool,
-        'askUniversity': askUniversity,
-        'createdBy': me.uid,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+    final user = FirebaseAuth.instance.currentUser!;
+    final roleSnap = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+    final role = (roleSnap.data()?['role'] ?? 'user').toString();
 
+    if (!canCreateEventsByRole(role)) {
       if (!context.mounted) return;
       AppNotice.show(
         context,
-        message: 'Ивент создан',
-        type: AppNoticeType.success,
-      );
-    } catch (e) {
-      if (!context.mounted) return;
-      AppNotice.show(
-        context,
-        message: 'Ошибка создания ивента: $e',
+        message: 'Только организатор, модератор или админ может создавать ивенты',
         type: AppNoticeType.error,
       );
+      return;
     }
+
+    await FirebaseFirestore.instance.collection('events').add({
+      'title': titleCtrl.text.trim(),
+      'description': descCtrl.text.trim(),
+      'imageUrl': imageUrl,
+      'place': placeCtrl.text.trim(),
+      'startAt': Timestamp.fromDate(startAt),
+      'isActive': true,
+      'askFullName': askFullName,
+      'askSchool': askSchool,
+      'askUniversity': askUniversity,
+      'createdBy': user.uid,
+      'createdByRole': role,
+      'createdAt': FieldValue.serverTimestamp(),
+      'capacity': int.tryParse(capacityCtrl.text.trim()) ?? 0,
+      'eventFormat': selectedEventFormat,
+      'recruitmentStatus': selectedRecruitmentStatus,
+      'city': selectedCity,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    if (!context.mounted) return;
+    AppNotice.show(
+      context,
+      message: 'Ивент создан',
+      type: AppNoticeType.success,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final stream = FirebaseFirestore.instance
+        .collection('events')
+        .where('isActive', isEqualTo: true)
+        .snapshots();
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pageBg = isDark ? const Color(0xFF0D1511) : const Color(0xFFF5F8F2);
 
-    return Scaffold(
-      backgroundColor: pageBg,
-      body: SafeArea(
-        child: FutureBuilder<Map<String, dynamic>?>(
-          future: _loadRole(),
-          builder: (context, roleSnap) {
-            final roleData = roleSnap.data ?? {};
-            final role = (roleData['role'] ?? 'user').toString();
-            final canCreate = canCreateEventsByRole(role);
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: _loadRole(),
+      builder: (context, roleSnap) {
+        final role = (roleSnap.data?['role'] ?? 'user').toString();
+        final canCreate = canCreateEventsByRole(role);
+        final canSeeReports = canSeeReportsByRole(role);
 
-            return Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                  child: _AppPageHeroHeader(
-                    title: 'Ивенты',
-                    subtitle:
-                        'Мероприятия, регистрации и общий движ внутри приложения.',
-                    icon: Icons.event_rounded,
-                    gradient: const [
-                      Color(0xFF0F172A),
-                      Color(0xFF1D3557),
-                      Color(0xFF2A6F97),
-                    ],
-                    onBack: () => Navigator.of(context).pop(),
-                    trailing: canCreate
-                        ? FilledButton.icon(
-                            onPressed: () => _openCreateEventDialog(context),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              foregroundColor: const Color(0xFF0F172A),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                            ),
-                            icon: const Icon(Icons.add_rounded),
-                            label: const Text('Создать'),
-                          )
-                        : null,
+        return Scaffold(
+          appBar: AppBar(
+            leading: IconButton(
+              onPressed: () => Navigator.of(context).pop(),
+              icon: const Icon(Icons.arrow_back_ios_new_rounded),
+            ),
+            title: const Text('Ивенты'),
+          ),
+          body: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).cardColor,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x12000000),
+                          blurRadius: 16,
+                          offset: Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Ивенты и мероприятия',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: isDark ? Colors.white : const Color(0xFF111827),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Здесь можно смотреть мероприятия, а для нужных ролей — создавать новые и разбирать жалобы.',
+                          style: TextStyle(
+                            height: 1.4,
+                            color: isDark ? Colors.white70 : const Color(0xFF6B7280),
+                          ),
+                        ),
+                        if (canCreate || canSeeReports) ...[
+                          const SizedBox(height: 14),
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: [
+                              if (canCreate)
+                                FilledButton.icon(
+                                  onPressed: () => _openCreateEventDialog(context),
+                                  icon: const Icon(Icons.add),
+                                  label: const Text('Создать ивент'),
+                                ),
+                              if (canSeeReports)
+                                OutlinedButton.icon(
+                                  onPressed: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => const AdminReportsScreen(),
+                                      ),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.flag_outlined),
+                                  label: const Text('Жалобы'),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 14),
-                Expanded(
-                  child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                    stream: FirebaseFirestore.instance
-                        .collection('events')
-                        .orderBy('startAt')
-                        .snapshots(),
-                    builder: (context, snap) {
-                      if (snap.hasError) {
-                        return Center(
-                          child: Text('Ошибка загрузки: ${snap.error}'),
-                        );
-                      }
+                  const SizedBox(height: 14),
+                  Expanded(
+                    child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: stream,
+                      builder: (context, snap) {
+                        if (snap.connectionState == ConnectionState.waiting) {
+                          return const Center(child: LeafSpinner(size: 30));
+                        }
 
-                      if (!snap.hasData) {
-                        return const Center(child: LeafSpinner(size: 30));
-                      }
+                        if (snap.hasError) {
+                          return Center(
+                            child: Text('Ошибка загрузки ивентов: ${snap.error}'),
+                          );
+                        }
 
-                      final docs = snap.data!.docs;
-
-                      if (docs.isEmpty) {
-                        return ListView(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(22),
+                        if (!snap.hasData || snap.data!.docs.isEmpty) {
+                          return Center(
+                            child: Container(
+                              padding: const EdgeInsets.all(20),
                               decoration: BoxDecoration(
                                 color: Theme.of(context).cardColor,
-                                borderRadius: BorderRadius.circular(28),
-                                boxShadow: const [
-                                  BoxShadow(
-                                    color: Color(0x12000000),
-                                    blurRadius: 18,
-                                    offset: Offset(0, 8),
-                                  ),
-                                ],
+                                borderRadius: BorderRadius.circular(22),
                               ),
-                              child: const Column(
-                                children: [
-                                  Icon(
-                                    Icons.event_busy_outlined,
-                                    size: 46,
-                                    color: Color(0xFF94A3B8),
-                                  ),
-                                  SizedBox(height: 12),
-                                  Text(
-                                    'Пока что нет новых ивентов',
-                                    style: TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                  SizedBox(height: 8),
-                                  Text(
-                                    'Когда появятся новые мероприятия, они будут показаны здесь.',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      height: 1.45,
-                                      color: Color(0xFF64748B),
-                                    ),
-                                  ),
-                                ],
+                              child: const Text(
+                                'Пока что нет новых ивентов',
+                                textAlign: TextAlign.center,
                               ),
                             ),
-                          ],
-                        );
-                      }
-
-                      return ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                        itemCount: docs.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 14),
-                        itemBuilder: (context, i) {
-                          final doc = docs[i];
-                          final data = doc.data();
-
-                          return EventBigCard(
-                            eventId: doc.id,
-                            data: data,
                           );
-                        },
-                      );
-                    },
+                        }
+
+                        final docs = snap.data!.docs.toList();
+
+                        docs.sort((a, b) {
+                          final aTs = a.data()['startAt'] as Timestamp?;
+                          final bTs = b.data()['startAt'] as Timestamp?;
+                          final aDate = aTs?.toDate() ?? DateTime(2100);
+                          final bDate = bTs?.toDate() ?? DateTime(2100);
+                          return aDate.compareTo(bDate);
+                        });
+
+                        return ListView.separated(
+                          itemCount: docs.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 16),
+                          itemBuilder: (context, i) {
+                            final doc = docs[i];
+                            return EventBigCard(
+                              eventId: doc.id,
+                              data: doc.data(),
+                            );
+                          },
+                        );
+                      },
+                    ),
                   ),
-                ),
-              ],
-            );
-          },
-        ),
-      ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -10953,22 +11124,34 @@ Future<void> closeRequestAndRateHelper({
         throw Exception('Заявка не найдена');
       }
 
-      final requestData = requestSnap.data() as Map<String, dynamic>;
+      if (!helperSnap.exists) {
+        throw Exception('Помощник не найден');
+      }
 
-      if ((requestData['status'] ?? '') == 'done') {
+      final requestData = requestSnap.data() as Map<String, dynamic>;
+      final helperData = helperSnap.data() as Map<String, dynamic>;
+
+      final status = (requestData['status'] ?? '').toString();
+      final authorId = (requestData['authorId'] ?? '').toString();
+      final acceptedHelpers =
+          List<String>.from(requestData['acceptedHelpers'] ?? []);
+      final alreadyRated = requestData['helperRated'] == true;
+
+      if (authorId != me.uid) {
+        throw Exception('Только автор заявки может завершить её');
+      }
+
+      if (status == 'done') {
         throw Exception('Заявка уже завершена');
       }
 
-      if ((requestData['helperRated'] ?? false) == true) {
+      if (alreadyRated) {
         throw Exception('Оценка уже была поставлена');
       }
 
-      final acceptedHelpers = List<String>.from(requestData['acceptedHelpers'] ?? []);
       if (!acceptedHelpers.contains(helperId)) {
-        throw Exception('Этот пользователь не является активным помощником');
+        throw Exception('Этот пользователь не является помощником по заявке');
       }
-
-      final helperData = helperSnap.data() ?? <String, dynamic>{};
 
       final oldRating = (helperData['rating'] is num)
           ? (helperData['rating'] as num).toDouble()
@@ -10978,9 +11161,12 @@ Future<void> closeRequestAndRateHelper({
           ? (helperData['ratingCount'] as num).toInt()
           : 0;
 
-      final oldHelpsCompleted = (helperData['volunteerHelpsCompletedCount'] is num)
-          ? (helperData['volunteerHelpsCompletedCount'] as num).toInt()
-          : 0;
+      final oldHelpsCompleted =
+          (helperData['volunteerHelpsCompletedCount'] is num)
+              ? (helperData['volunteerHelpsCompletedCount'] as num).toInt()
+              : ((helperData['volunteerHelpsCount'] is num)
+                  ? (helperData['volunteerHelpsCount'] as num).toInt()
+                  : 0);
 
       final oldAccepted = (helperData['volunteerAcceptedCount'] is num)
           ? (helperData['volunteerAcceptedCount'] as num).toInt()
@@ -10990,35 +11176,17 @@ Future<void> closeRequestAndRateHelper({
           ? (helperData['volunteerCancelledCount'] as num).toInt()
           : 0;
 
-      final recentRatingsQuery = await db
-          .collection('users')
-          .doc(helperId)
-          .collection('reviews')
-          .where('fromUserId', isEqualTo: me.uid)
-          .where(
-            'createdAt',
-            isGreaterThan: Timestamp.fromDate(
-              DateTime.now().subtract(const Duration(hours: 1)),
-            ),
-          )
-          .get();
-
-      if (recentRatingsQuery.docs.length >= 10) {
-        throw Exception('Нельзя оценить одного и того же человека больше 10 раз за 1 час');
-      }
-
       newCount = oldCount + 1;
       newRating = ((oldRating * oldCount) + result.rating) / newCount;
       newHelpsCompleted = oldHelpsCompleted + 1;
 
-      final totalVolunteerActions = oldAccepted;
-      final completedPercent = totalVolunteerActions <= 0
+      final completedPercent = oldAccepted <= 0
           ? 0.0
-          : (newHelpsCompleted / totalVolunteerActions) * 100.0;
+          : (newHelpsCompleted / oldAccepted) * 100.0;
 
-      final cancelPercent = totalVolunteerActions <= 0
+      final cancelPercent = oldAccepted <= 0
           ? 0.0
-          : (oldCancelled / totalVolunteerActions) * 100.0;
+          : (oldCancelled / oldAccepted) * 100.0;
 
       tx.set(helperRef, {
         'rating': newRating,
@@ -11031,11 +11199,7 @@ Future<void> closeRequestAndRateHelper({
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
-      final reviewRef = db
-          .collection('users')
-          .doc(helperId)
-          .collection('reviews')
-          .doc();
+      final reviewRef = helperRef.collection('reviews').doc();
 
       tx.set(reviewRef, {
         'requestId': requestId,
@@ -11054,6 +11218,7 @@ Future<void> closeRequestAndRateHelper({
         'helperReview': result.review,
         'completedHelperId': helperId,
         'closedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     });
 
@@ -11074,13 +11239,11 @@ Future<void> closeRequestAndRateHelper({
 
     if (!context.mounted) return;
 
-    final text = achievementMessages.isEmpty
-        ? 'Заявка завершена, оценка и отзыв сохранены'
-        : 'Заявка завершена, оценка и отзыв сохранены\n${achievementMessages.join('\n')}';
-
     AppNotice.show(
       context,
-      message: text,
+      message: achievementMessages.isEmpty
+          ? 'Заявка завершена, отзыв сохранён'
+          : 'Заявка завершена, отзыв сохранён\n${achievementMessages.join('\n')}',
       type: AppNoticeType.success,
     );
   } catch (e) {
