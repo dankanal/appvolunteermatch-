@@ -5875,97 +5875,80 @@ class _RequestDocCardState extends State<RequestDocCard> {
       final db = FirebaseFirestore.instance;
       final requestRef = db.collection('requests').doc(widget.requestId);
 
-      String chatId = '';
+      final requestSnap = await requestRef.get();
 
-      await db.runTransaction((tx) async {
-        final requestSnap = await tx.get(requestRef);
+      if (!requestSnap.exists) {
+        throw Exception('Заявка не найдена');
+      }
 
-        if (!requestSnap.exists) {
-          throw Exception('Заявка не найдена');
-        }
+      final data = requestSnap.data() as Map<String, dynamic>;
 
-        final data = requestSnap.data() as Map<String, dynamic>;
+      final authorId = (data['authorId'] ?? '').toString();
+      final status = (data['status'] ?? 'open').toString();
+      final helpersNeeded = (data['helpersNeeded'] is num)
+          ? (data['helpersNeeded'] as num).toInt()
+          : 1;
+      final acceptedHelpers = List<String>.from(data['acceptedHelpers'] ?? []);
+      final existingChatId = (data['chatId'] ?? '').toString();
 
-        final authorId = (data['authorId'] ?? '').toString();
-        final status = (data['status'] ?? 'open').toString();
-        final helpersNeeded = (data['helpersNeeded'] is num)
-            ? (data['helpersNeeded'] as num).toInt()
-            : 1;
-        final acceptedHelpers = List<String>.from(data['acceptedHelpers'] ?? []);
-        final existingChatId = (data['chatId'] ?? '').toString();
+      if (authorId == me.uid) {
+        throw Exception('Нельзя откликнуться на свою заявку');
+      }
 
-        if (authorId == me.uid) {
-          throw Exception('Нельзя откликнуться на свою заявку');
-        }
+      if (status == 'done' || status == 'cancelled' || status == 'expired') {
+        throw Exception('Заявка уже закрыта');
+      }
 
-        if (status == 'done' || status == 'cancelled' || status == 'expired') {
-          throw Exception('Заявка уже закрыта');
-        }
+      String chatId = existingChatId;
 
-        if (acceptedHelpers.contains(me.uid)) {
-          if (existingChatId.isNotEmpty) {
-            chatId = existingChatId;
-            return;
-          }
-        }
+      if (acceptedHelpers.length >= helpersNeeded &&
+          !acceptedHelpers.contains(me.uid)) {
+        throw Exception('Нужное количество помощников уже набрано');
+      }
 
-        if (acceptedHelpers.length >= helpersNeeded &&
-            !acceptedHelpers.contains(me.uid)) {
-          throw Exception('Нужное количество помощников уже набрано');
-        }
-
-        final updatedHelpers = acceptedHelpers.contains(me.uid)
-            ? acceptedHelpers
-            : [...acceptedHelpers, me.uid];
-
-        if (existingChatId.isEmpty) {
-          final chatRef = db.collection('chats').doc();
-          chatId = chatRef.id;
-
-          tx.set(chatRef, {
-            'chatId': chatId,
-            'requestId': widget.requestId,
-            'requestTitle': widget.title,
-            'requestCategory': widget.category,
-            'members': [authorId, ...updatedHelpers],
-            'createdAt': FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-            'lastMessage': 'Чат создан',
-            'lastMessageAt': FieldValue.serverTimestamp(),
-          });
-
-          final systemMessageRef = chatRef.collection('messages').doc();
-          tx.set(systemMessageRef, {
-            'text': 'Чат по заявке создан',
-            'senderId': 'system',
-            'createdAt': FieldValue.serverTimestamp(),
-            'readBy': ['system'],
-            'deletedForAll': false,
-          });
-        } else {
-          chatId = existingChatId;
-
-          final chatRef = db.collection('chats').doc(existingChatId);
-          tx.set(chatRef, {
-            'members': FieldValue.arrayUnion([me.uid]),
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-        }
-
-        tx.set(requestRef, {
-          'chatId': chatId,
-          'status': 'in_chat',
-          'acceptedHelpers': updatedHelpers,
-          'acceptedHelpersCount': updatedHelpers.length,
-          'acceptedBy': updatedHelpers.isNotEmpty ? updatedHelpers.first : me.uid,
-          'acceptedAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-      });
+      final updatedHelpers = acceptedHelpers.contains(me.uid)
+          ? acceptedHelpers
+          : [...acceptedHelpers, me.uid];
 
       if (chatId.isEmpty) {
-        throw Exception('Чат не создался');
+        final chatRef = db.collection('chats').doc();
+        chatId = chatRef.id;
+
+        await chatRef.set({
+          'chatId': chatId,
+          'requestId': widget.requestId,
+          'requestTitle': widget.title,
+          'requestCategory': widget.category,
+          'members': [authorId, ...updatedHelpers],
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+          'lastMessage': 'Чат создан',
+          'lastMessageAt': FieldValue.serverTimestamp(),
+        });
+
+        await chatRef.collection('messages').add({
+          'text': 'Чат по заявке создан',
+          'senderId': 'system',
+          'createdAt': FieldValue.serverTimestamp(),
+          'readBy': ['system'],
+          'deletedForAll': false,
+        });
+      } else {
+        await db.collection('chats').doc(chatId).set({
+          'members': FieldValue.arrayUnion([me.uid]),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
       }
+
+      await requestRef.set({
+        'chatId': chatId,
+        'status': 'in_chat',
+        'acceptedHelpers': updatedHelpers,
+        'acceptedHelpersCount': updatedHelpers.length,
+        'acceptedBy': updatedHelpers.isNotEmpty ? updatedHelpers.first : me.uid,
+        'acceptedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
       await db.collection('users').doc(me.uid).set({
         'volunteerAcceptedCount': FieldValue.increment(1),
