@@ -27,6 +27,198 @@ import 'dart:html' as html;
 import 'package:intl/intl.dart';
 
 
+const String kSupportEmail = 'volunteermatch1@gmail.com';
+const String kSupportWhatsAppPhone = '77016629276'; // без +, пробелов и скобок
+const String kSupportWhatsAppText =
+    'Здравствуйте! У меня вопрос по приложению Volunteer Match.';
+
+
+class _SupportActionTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _SupportActionTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final text = isDark ? Colors.white : const Color(0xFF111827);
+    final sub = isDark ? Colors.white70 : const Color(0xFF6B7280);
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isDark
+              ? Colors.white.withOpacity(0.05)
+              : Colors.black.withOpacity(0.03),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: const Color(0xFFA8E932).withOpacity(0.18),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: text,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: sub,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: sub,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+class SupportSheet extends StatelessWidget {
+  const SupportSheet({super.key});
+
+  Future<void> _openEmail(BuildContext context) async {
+    final subject = Uri.encodeComponent('Volunteer Match Support');
+    final body = Uri.encodeComponent(
+      'Здравствуйте!\n\nОпишите, пожалуйста, проблему:\n',
+    );
+
+    final uri = Uri.parse(
+      'mailto:$kSupportEmail?subject=$subject&body=$body',
+    );
+
+    final ok = await launchUrl(uri);
+    if (!ok && context.mounted) {
+      AppNotice.show(
+        context,
+        message: 'Не удалось открыть почту',
+        type: AppNoticeType.error,
+      );
+    }
+  }
+
+  Future<void> _openWhatsApp(BuildContext context) async {
+    final text = Uri.encodeComponent(kSupportWhatsAppText);
+
+    final uri = Uri.parse(
+      'https://wa.me/$kSupportWhatsAppPhone?text=$text',
+    );
+
+    final ok = await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+    );
+
+    if (!ok && context.mounted) {
+      AppNotice.show(
+        context,
+        message: 'Не удалось открыть WhatsApp',
+        type: AppNoticeType.error,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final text = isDark ? Colors.white : const Color(0xFF111827);
+    final sub = isDark ? Colors.white70 : const Color(0xFF6B7280);
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            borderRadius: BorderRadius.circular(28),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 42,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white24 : Colors.black12,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Поддержка',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: text,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Выбери удобный способ связи',
+                style: TextStyle(
+                  color: sub,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 18),
+              _SupportActionTile(
+                icon: Icons.mail_outline,
+                title: 'Написать на почту',
+                subtitle: kSupportEmail,
+                onTap: () => _openEmail(context),
+              ),
+              const SizedBox(height: 10),
+              _SupportActionTile(
+                icon: Icons.chat_outlined,
+                title: 'Написать в WhatsApp',
+                subtitle: 'Business account',
+                onTap: () => _openWhatsApp(context),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 
 const List<String> kAvailableRequestTags = [
   'Срочно',
@@ -2080,6 +2272,7 @@ class UserMiniProfileButton extends StatelessWidget {
         final data = snap.data?.data() ?? {};
         final name = (data['name'] ?? 'Без имени').toString();
         final avatarUrl = (data['avatarUrl'] ?? '').toString();
+        final isOnline = data['isOnline'] == true;
         final isDark = Theme.of(context).brightness == Brightness.dark;
 
         return InkWell(
@@ -2105,18 +2298,38 @@ class UserMiniProfileButton extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                CircleAvatar(
-                  radius: compact ? 13 : 16,
-                  backgroundColor: const Color(0xFFC8F0A4),
-                  backgroundImage:
-                      avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
-                  child: avatarUrl.isEmpty
-                      ? Icon(
-                          Icons.person,
-                          size: compact ? 14 : 16,
-                          color: isDark ? Colors.white : Colors.black87,
-                        )
-                      : null,
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    CircleAvatar(
+                      radius: compact ? 13 : 16,
+                      backgroundColor: const Color(0xFFC8F0A4),
+                      backgroundImage:
+                          avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
+                      child: avatarUrl.isEmpty
+                          ? Icon(
+                              Icons.person,
+                              size: compact ? 14 : 16,
+                              color: isDark ? Colors.white : Colors.black87,
+                            )
+                          : null,
+                    ),
+                    Positioned(
+                      right: -1,
+                      bottom: -1,
+                      child: Container(
+                        width: compact ? 9 : 10,
+                        height: compact ? 9 : 10,
+                        decoration: BoxDecoration(
+                          color: isOnline
+                              ? const Color(0xFF22C55E)
+                              : const Color(0xFF94A3B8),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 1.2),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(width: 8),
                 ConstrainedBox(
@@ -2668,10 +2881,187 @@ class _VolunteerMatchAppState extends State<VolunteerMatchApp> {
         return MaterialApp(
           title: 'Volunteer Match',
           debugShowCheckedModeBanner: false,
+          locale: Locale(_settings.languageCode),
           theme: _buildTheme(_settings.isDarkMode),
           home: AuthGateWithSettings(settings: _settings),
         );
       },
+    );
+  }
+}
+
+class UserProfileSetupScreen extends StatefulWidget {
+  final VoidCallback onDone;
+
+  const UserProfileSetupScreen({
+    super.key,
+    required this.onDone,
+  });
+
+  @override
+  State<UserProfileSetupScreen> createState() => _UserProfileSetupScreenState();
+}
+
+class _UserProfileSetupScreenState extends State<UserProfileSetupScreen> {
+  final _firstName = TextEditingController();
+  final _lastName = TextEditingController();
+  final _phone = TextEditingController();
+  final _age = TextEditingController();
+
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _firstName.dispose();
+    _lastName.dispose();
+    _phone.dispose();
+    _age.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final first = _firstName.text.trim();
+    final last = _lastName.text.trim();
+    final phone = _phone.text.trim();
+    final ageText = _age.text.trim();
+    final age = int.tryParse(ageText);
+
+    if (first.isEmpty || last.isEmpty || phone.isEmpty || age == null) {
+      AppNotice.show(
+        context,
+        message: 'Заполни имя, фамилию, номер и возраст',
+        type: AppNoticeType.error,
+      );
+      return;
+    }
+
+    setState(() => _saving = true);
+
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'firstName': first,
+        'lastName': last,
+        'phone': phone,
+        'age': age,
+        'name': '$first $last',
+        'bio': 'Возраст: $age',
+        'profileSetupDone': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      if (!mounted) return;
+      widget.onDone();
+    } catch (e) {
+      if (!mounted) return;
+      AppNotice.show(
+        context,
+        message: 'Ошибка сохранения: $e',
+        type: AppNoticeType.error,
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Stack(
+        children: [
+          const FallingLeavesBackground(dense: true),
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.92),
+                    borderRadius: BorderRadius.circular(30),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x18000000),
+                        blurRadius: 30,
+                        offset: Offset(0, 14),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Заполни профиль',
+                        style: TextStyle(
+                          fontSize: 30,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF091633),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'Это нужно один раз после регистрации.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Color(0xFF667085),
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+                      TextField(
+                        controller: _firstName,
+                        decoration: const InputDecoration(
+                          labelText: 'Имя',
+                          prefixIcon: Icon(Icons.person_outline),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _lastName,
+                        decoration: const InputDecoration(
+                          labelText: 'Фамилия',
+                          prefixIcon: Icon(Icons.badge_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _phone,
+                        keyboardType: TextInputType.phone,
+                        decoration: const InputDecoration(
+                          labelText: 'Номер телефона',
+                          prefixIcon: Icon(Icons.phone_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _age,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Возраст',
+                          prefixIcon: Icon(Icons.cake_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: _saving ? null : _save,
+                          child: _saving
+                              ? const LeafSpinner(size: 18, color: Colors.white)
+                              : const Text('Сохранить'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -2728,6 +3118,16 @@ class _AuthGateWithSettingsState extends State<AuthGateWithSettings> {
     setState(() => _checkedSession = true);
   }
 
+  Future<bool> _isProfileSetupDone(User user) async {
+    final snap = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+
+    final data = snap.data() ?? {};
+    return data['profileSetupDone'] == true;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!_checkedSession) {
@@ -2766,13 +3166,646 @@ class _AuthGateWithSettingsState extends State<AuthGateWithSettings> {
         }
 
         return OnboardingGate(
-          child: MainShell(settings: widget.settings),
+          child: FutureBuilder<bool>(
+            future: _isProfileSetupDone(user),
+            builder: (context, profileSnap) {
+              if (!profileSnap.hasData) {
+                return const Scaffold(
+                  body: Center(child: LeafSpinner(size: 30)),
+                );
+              }
+
+              if (profileSnap.data == false) {
+                return UserProfileSetupScreen(
+                  onDone: () {
+                    if (!mounted) return;
+                    setState(() {});
+                  },
+                );
+              }
+
+              return MainShell(settings: widget.settings);
+            },
+          ),
         );
       },
     );
   }
 }
 
+
+class ChangeEmailScreen extends StatefulWidget {
+  const ChangeEmailScreen({super.key});
+
+  @override
+  State<ChangeEmailScreen> createState() => _ChangeEmailScreenState();
+}
+
+class _ChangeEmailScreenState extends State<ChangeEmailScreen> {
+  final _email = TextEditingController();
+  final _password = TextEditingController();
+
+  bool _busy = false;
+  bool _obscure = true;
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _password.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || user.email == null) return;
+
+    final newEmail = _email.text.trim();
+    final password = _password.text.trim();
+
+    if (newEmail.isEmpty || password.isEmpty) {
+      AppNotice.show(
+        context,
+        message: 'Заполни новый email и текущий пароль',
+        type: AppNoticeType.error,
+      );
+      return;
+    }
+
+    setState(() => _busy = true);
+
+    try {
+      final credential = EmailAuthProvider.credential(
+        email: user.email!,
+        password: password,
+      );
+
+      await user.reauthenticateWithCredential(credential);
+      await user.verifyBeforeUpdateEmail(newEmail);
+
+      if (!mounted) return;
+      AppNotice.show(
+        context,
+        message: 'Письмо для смены email отправлено на новый адрес',
+        type: AppNoticeType.success,
+      );
+      Navigator.of(context).pop();
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      AppNotice.show(
+        context,
+        message: e.message ?? e.code,
+        type: AppNoticeType.error,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      AppNotice.show(
+        context,
+        message: 'Ошибка: $e',
+        type: AppNoticeType.error,
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Сменить email'),
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            TextField(
+              controller: _email,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(
+                labelText: 'Новый email',
+                prefixIcon: Icon(Icons.mail_outline),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _password,
+              obscureText: _obscure,
+              decoration: InputDecoration(
+                labelText: 'Текущий пароль',
+                prefixIcon: const Icon(Icons.lock_outline),
+                suffixIcon: IconButton(
+                  onPressed: () => setState(() => _obscure = !_obscure),
+                  icon: Icon(
+                    _obscure
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            FilledButton(
+              onPressed: _busy ? null : _submit,
+              child: _busy
+                  ? const LeafSpinner(size: 18, color: Colors.white)
+                  : const Text('Отправить подтверждение'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+class ChangePasswordScreen extends StatefulWidget {
+  const ChangePasswordScreen({super.key});
+
+  @override
+  State<ChangePasswordScreen> createState() => _ChangePasswordScreenState();
+}
+
+class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
+  final _currentPassword = TextEditingController();
+  final _newPassword = TextEditingController();
+
+  bool _busy = false;
+  bool _obscureCurrent = true;
+  bool _obscureNew = true;
+
+  @override
+  void dispose() {
+    _currentPassword.dispose();
+    _newPassword.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || user.email == null) return;
+
+    final currentPassword = _currentPassword.text.trim();
+    final newPassword = _newPassword.text.trim();
+
+    if (currentPassword.isEmpty || newPassword.length < 6) {
+      AppNotice.show(
+        context,
+        message: 'Введи текущий пароль и новый пароль минимум из 6 символов',
+        type: AppNoticeType.error,
+      );
+      return;
+    }
+
+    setState(() => _busy = true);
+
+    try {
+      final credential = EmailAuthProvider.credential(
+        email: user.email!,
+        password: currentPassword,
+      );
+
+      await user.reauthenticateWithCredential(credential);
+      await user.updatePassword(newPassword);
+
+      if (!mounted) return;
+      AppNotice.show(
+        context,
+        message: 'Пароль успешно изменён',
+        type: AppNoticeType.success,
+      );
+      Navigator.of(context).pop();
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      AppNotice.show(
+        context,
+        message: e.message ?? e.code,
+        type: AppNoticeType.error,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      AppNotice.show(
+        context,
+        message: 'Ошибка: $e',
+        type: AppNoticeType.error,
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Сменить пароль'),
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            TextField(
+              controller: _currentPassword,
+              obscureText: _obscureCurrent,
+              decoration: InputDecoration(
+                labelText: 'Текущий пароль',
+                prefixIcon: const Icon(Icons.lock_outline),
+                suffixIcon: IconButton(
+                  onPressed: () => setState(() => _obscureCurrent = !_obscureCurrent),
+                  icon: Icon(
+                    _obscureCurrent
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _newPassword,
+              obscureText: _obscureNew,
+              decoration: InputDecoration(
+                labelText: 'Новый пароль',
+                prefixIcon: const Icon(Icons.password_outlined),
+                suffixIcon: IconButton(
+                  onPressed: () => setState(() => _obscureNew = !_obscureNew),
+                  icon: Icon(
+                    _obscureNew
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            FilledButton(
+              onPressed: _busy ? null : _submit,
+              child: _busy
+                  ? const LeafSpinner(size: 18, color: Colors.white)
+                  : const Text('Изменить пароль'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+class NewsScreen extends StatefulWidget {
+  const NewsScreen({super.key});
+
+  @override
+  State<NewsScreen> createState() => _NewsScreenState();
+}
+
+class _NewsScreenState extends State<NewsScreen> {
+  final _imageService = CloudinaryImageService();
+
+  Future<Map<String, dynamic>?> _loadRole() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return null;
+
+    final snap = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+
+    return snap.data();
+  }
+
+  Future<void> _openCreateNewsDialog(BuildContext context) async {
+    final me = FirebaseAuth.instance.currentUser;
+    if (me == null) return;
+
+    final titleCtrl = TextEditingController();
+    final textCtrl = TextEditingController();
+    String imageUrl = '';
+    bool imageUploading = false;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setLocal) {
+          Future<void> pickImage() async {
+            setLocal(() => imageUploading = true);
+            try {
+              final url = await _imageService.pickAndUploadImage(
+                folder: 'volunteer_match/news',
+                imageQuality: 80,
+              );
+              if (url != null) {
+                setLocal(() => imageUrl = url);
+              }
+            } catch (e) {
+              if (context.mounted) {
+                AppNotice.show(
+                  context,
+                  message: 'Ошибка загрузки картинки: $e',
+                  type: AppNoticeType.error,
+                );
+              }
+            } finally {
+              setLocal(() => imageUploading = false);
+            }
+          }
+
+          return AlertDialog(
+            title: const Text('Новая новость'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: titleCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Заголовок',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: textCtrl,
+                    maxLines: 5,
+                    decoration: const InputDecoration(
+                      labelText: 'Текст новости',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (imageUrl.isNotEmpty)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Image.network(
+                        imageUrl,
+                        height: 160,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        filterQuality: FilterQuality.low,
+                      ),
+                    ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: imageUploading ? null : pickImage,
+                      icon: imageUploading
+                          ? const LeafSpinner(size: 18)
+                          : const Icon(Icons.image_outlined),
+                      label: Text(
+                        imageUploading
+                            ? 'Загрузка...'
+                            : imageUrl.isEmpty
+                                ? 'Выбрать фон'
+                                : 'Заменить фон',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Отмена'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Опубликовать'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (ok != true) return;
+
+    if (titleCtrl.text.trim().isEmpty || textCtrl.text.trim().isEmpty) {
+      if (!context.mounted) return;
+      AppNotice.show(
+        context,
+        message: 'Заполни заголовок и текст',
+        type: AppNoticeType.error,
+      );
+      return;
+    }
+
+    try {
+      await FirebaseFirestore.instance.collection('news').add({
+        'title': titleCtrl.text.trim(),
+        'text': textCtrl.text.trim(),
+        'imageUrl': imageUrl,
+        'createdBy': me.uid,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      if (!context.mounted) return;
+      AppNotice.show(
+        context,
+        message: 'Новость опубликована',
+        type: AppNoticeType.success,
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      AppNotice.show(
+        context,
+        message: 'Ошибка публикации: $e',
+        type: AppNoticeType.error,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: _loadRole(),
+      builder: (context, roleSnap) {
+        final role = (roleSnap.data?['role'] ?? 'user').toString();
+        final isAdmin = role == 'admin';
+
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('News'),
+            actions: [
+              if (isAdmin)
+                IconButton(
+                  tooltip: 'Добавить новость',
+                  onPressed: () => _openCreateNewsDialog(context),
+                  icon: const Icon(Icons.add),
+                ),
+            ],
+          ),
+          body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: FirebaseFirestore.instance
+                .collection('news')
+                .orderBy('createdAt', descending: true)
+                .snapshots(),
+            builder: (context, snap) {
+              if (!snap.hasData) {
+                return const Center(child: LeafSpinner(size: 28));
+              }
+
+              final docs = snap.data!.docs;
+
+              if (docs.isEmpty) {
+                return const Center(
+                  child: Text('Пока что новостей нет'),
+                );
+              }
+
+              return ListView.separated(
+                padding: const EdgeInsets.all(16),
+                itemCount: docs.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 14),
+                itemBuilder: (context, i) {
+                  final data = docs[i].data();
+                  final title = (data['title'] ?? '').toString();
+                  final text = (data['text'] ?? '').toString();
+                  final imageUrl = (data['imageUrl'] ?? '').toString();
+                  final createdAt = data['createdAt'] as Timestamp?;
+
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).cardColor,
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (imageUrl.isNotEmpty)
+                          ClipRRect(
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(24),
+                            ),
+                            child: Image.network(
+                              imageUrl,
+                              height: 180,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              filterQuality: FilterQuality.low,
+                            ),
+                          ),
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              if (createdAt != null)
+                                Text(
+                                  DateFormat('dd.MM.yyyy HH:mm')
+                                      .format(createdAt.toDate()),
+                                  style: const TextStyle(
+                                    color: Color(0xFF6B7280),
+                                  ),
+                                ),
+                              const SizedBox(height: 10),
+                              Text(
+                                text,
+                                style: const TextStyle(height: 1.5),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+}
+
+
+class ProgramsScreen extends StatelessWidget {
+  const ProgramsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final items = const [
+      {
+        'title': 'Помощь пожилым',
+        'text': 'Программа помощи пожилым людям: продукты, лекарства, сопровождение, разговор.',
+        'icon': Icons.elderly_outlined,
+      },
+      {
+        'title': 'Поддержка школьников',
+        'text': 'Помощь с учёбой, материалами, объяснением тем и подготовкой.',
+        'icon': Icons.school_outlined,
+      },
+      {
+        'title': 'Городские инициативы',
+        'text': 'Локальные полезные дела, ивенты, помощь сообществу и организациям.',
+        'icon': Icons.location_city_outlined,
+      },
+    ];
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Programs'),
+      ),
+      body: ListView.separated(
+        padding: const EdgeInsets.all(16),
+        itemCount: items.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 12),
+        itemBuilder: (context, i) {
+          final item = items[i];
+          return Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFA8E932).withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(item['icon'] as IconData),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item['title'] as String,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        item['text'] as String,
+                        style: const TextStyle(height: 1.45),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
 
 class SettingsScreen extends StatelessWidget {
   final bool isDarkMode;
@@ -2838,6 +3871,15 @@ class SettingsScreen extends StatelessWidget {
     }
   }
 
+  void _openSupport(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: false,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const SupportSheet(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bg = isDarkMode ? const Color(0xFF0B1220) : const Color(0xFFF8FAFC);
@@ -2900,6 +3942,22 @@ class SettingsScreen extends StatelessWidget {
                       }
                     },
                   ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.support_agent_outlined),
+                  title: Text(
+                    'Поддержка',
+                    style: TextStyle(
+                      color: text,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'Почта и WhatsApp',
+                    style: TextStyle(color: sub),
+                  ),
+                  onTap: () => _openSupport(context),
                 ),
                 const Divider(height: 1),
                 ListTile(
@@ -4579,15 +5637,23 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
 }
 
 
+
+
+
 class AppSettingsController extends ChangeNotifier {
   static const _darkModeKey = 'app_dark_mode';
+  static const _languageKey = 'app_language_code';
 
   bool _isDarkMode = false;
+  String _languageCode = 'ru';
+
   bool get isDarkMode => _isDarkMode;
+  String get languageCode => _languageCode;
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
     _isDarkMode = prefs.getBool(_darkModeKey) ?? false;
+    _languageCode = prefs.getString(_languageKey) ?? 'ru';
     notifyListeners();
   }
 
@@ -4598,6 +5664,18 @@ class AppSettingsController extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_darkModeKey, value);
   }
+
+  Future<void> setLanguageCode(String value) async {
+    _languageCode = value;
+    notifyListeners();
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_languageKey, value);
+  }
+}
+
+String tr(String lang, String ru, String en) {
+  return lang == 'en' ? en : ru;
 }
 
 
@@ -4673,7 +5751,7 @@ class _AuthInfoBullet extends StatelessWidget {
   }
 }
 
-class _AuthCard extends StatelessWidget {
+class _AuthCard extends StatefulWidget {
   final bool isLogin;
   final bool busy;
   final TextEditingController emailController;
@@ -4691,6 +5769,13 @@ class _AuthCard extends StatelessWidget {
     required this.onToggle,
     required this.onBack,
   });
+
+  @override
+  State<_AuthCard> createState() => _AuthCardState();
+}
+
+class _AuthCardState extends State<_AuthCard> {
+  bool _obscure = true;
 
   @override
   Widget build(BuildContext context) {
@@ -4714,7 +5799,7 @@ class _AuthCard extends StatelessWidget {
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
-              onPressed: onBack,
+              onPressed: widget.onBack,
               icon: const Icon(Icons.arrow_back_ios_new, size: 16),
               label: const Text('Назад'),
             ),
@@ -4731,7 +5816,7 @@ class _AuthCard extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            isLogin ? 'С возвращением' : 'Создайте аккаунт',
+            widget.isLogin ? 'С возвращением' : 'Создайте аккаунт',
             style: const TextStyle(
               fontSize: 30,
               fontWeight: FontWeight.w900,
@@ -4740,7 +5825,7 @@ class _AuthCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            isLogin
+            widget.isLogin
                 ? 'Войдите, чтобы продолжить пользоваться Volunteer Match'
                 : 'Зарегистрируйтесь и начните помогать людям рядом',
             textAlign: TextAlign.center,
@@ -4751,7 +5836,7 @@ class _AuthCard extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           TextField(
-            controller: emailController,
+            controller: widget.emailController,
             keyboardType: TextInputType.emailAddress,
             decoration: InputDecoration(
               hintText: 'Email',
@@ -4766,11 +5851,21 @@ class _AuthCard extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           TextField(
-            controller: passController,
-            obscureText: true,
+            controller: widget.passController,
+            obscureText: _obscure,
             decoration: InputDecoration(
               hintText: 'Пароль (мин. 6)',
               prefixIcon: const Icon(Icons.lock_outline),
+              suffixIcon: IconButton(
+                onPressed: () {
+                  setState(() => _obscure = !_obscure);
+                },
+                icon: Icon(
+                  _obscure
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                ),
+              ),
               filled: true,
               fillColor: const Color(0xFFF6F8FC),
               border: OutlineInputBorder(
@@ -4783,7 +5878,7 @@ class _AuthCard extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: FilledButton(
-              onPressed: busy ? null : onSubmit,
+              onPressed: widget.busy ? null : widget.onSubmit,
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFF466E2D),
                 foregroundColor: Colors.white,
@@ -4792,24 +5887,19 @@ class _AuthCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(18),
                 ),
               ),
-              child: busy
-                  ? const LeafSpinner(
-                      size: 24,
-                      color: Colors.white,
-                    )
+              child: widget.busy
+                  ? const LeafSpinner(size: 24, color: Colors.white)
                   : Text(
-                      isLogin ? 'Войти' : 'Создать аккаунт',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                      ),
+                      widget.isLogin ? 'Войти' : 'Создать аккаунт',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
             ),
           ),
           const SizedBox(height: 10),
           TextButton(
-            onPressed: busy ? null : onToggle,
+            onPressed: widget.busy ? null : widget.onToggle,
             child: Text(
-              isLogin
+              widget.isLogin
                   ? 'Нет аккаунта? Регистрация'
                   : 'Уже есть аккаунт? Войти',
             ),
@@ -5382,16 +6472,14 @@ class _MainShellState extends State<MainShell> {
                               onOpenCreateRequest: () {
                                 Navigator.of(context).push(
                                   MaterialPageRoute(
-                                    builder: (_) =>
-                                        const CreateRequestScreen(),
+                                    builder: (_) => const CreateRequestScreen(),
                                   ),
                                 );
                               },
                               onOpenOrganizers: () {
                                 Navigator.of(context).push(
                                   MaterialPageRoute(
-                                    builder: (_) =>
-                                        const OrganizersScreen(),
+                                    builder: (_) => const OrganizersScreen(),
                                   ),
                                 );
                               },
@@ -5399,6 +6487,20 @@ class _MainShellState extends State<MainShell> {
                                 Navigator.of(context).push(
                                   MaterialPageRoute(
                                     builder: (_) => const RequestsHubPage(),
+                                  ),
+                                );
+                              },
+                              onOpenPrograms: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => const ProgramsScreen(),
+                                  ),
+                                );
+                              },
+                              onOpenNews: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => const NewsScreen(),
                                   ),
                                 );
                               },
@@ -5811,7 +6913,137 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 }
 
+Future<String> ensureRequestChatAndJoin({
+  required String requestId,
+  required String requestTitle,
+  required String requestCategory,
+  required String helperUserId,
+}) async {
+  final db = FirebaseFirestore.instance;
+  final requestRef = db.collection('requests').doc(requestId);
 
+  final requestSnap = await requestRef.get();
+  if (!requestSnap.exists) {
+    throw Exception('Заявка не найдена');
+  }
+
+  final data = requestSnap.data() as Map<String, dynamic>;
+
+  final authorId = (data['authorId'] ?? '').toString();
+  final status = (data['status'] ?? 'open').toString();
+  final helpersNeeded = (data['helpersNeeded'] is num)
+      ? (data['helpersNeeded'] as num).toInt()
+      : 1;
+  final acceptedHelpers = List<String>.from(data['acceptedHelpers'] ?? []);
+  final existingChatId = (data['chatId'] ?? '').toString();
+
+  if (authorId == helperUserId) {
+    throw Exception('Нельзя откликнуться на свою заявку');
+  }
+
+  if (status == 'done' || status == 'cancelled' || status == 'expired') {
+    throw Exception('Заявка уже закрыта');
+  }
+
+  if (acceptedHelpers.length >= helpersNeeded &&
+      !acceptedHelpers.contains(helperUserId)) {
+    throw Exception('Нужное количество помощников уже набрано');
+  }
+
+  final updatedHelpers = acceptedHelpers.contains(helperUserId)
+      ? acceptedHelpers
+      : [...acceptedHelpers, helperUserId];
+
+  String chatId = existingChatId;
+
+  if (chatId.isEmpty) {
+    final existingChatQuery = await db
+        .collection('chats')
+        .where('requestId', isEqualTo: requestId)
+        .limit(1)
+        .get();
+
+    if (existingChatQuery.docs.isNotEmpty) {
+      final existingDoc = existingChatQuery.docs.first;
+      chatId = existingDoc.id;
+
+      await existingDoc.reference.set({
+        'members': FieldValue.arrayUnion([authorId, ...updatedHelpers]),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } else {
+      final chatRef = db.collection('chats').doc();
+      chatId = chatRef.id;
+
+      await chatRef.set({
+        'chatId': chatId,
+        'requestId': requestId,
+        'requestTitle': requestTitle,
+        'requestCategory': requestCategory,
+        'members': [authorId, ...updatedHelpers],
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'lastMessage': 'Чат создан',
+        'lastMessageAt': FieldValue.serverTimestamp(),
+        'typingBy': <String, dynamic>{},
+      });
+
+      await chatRef.collection('messages').add({
+        'text': 'Чат по заявке создан',
+        'senderId': 'system',
+        'createdAt': FieldValue.serverTimestamp(),
+        'readBy': ['system'],
+        'deletedForAll': false,
+      });
+    }
+  } else {
+    await db.collection('chats').doc(chatId).set({
+      'members': FieldValue.arrayUnion([helperUserId]),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'typingBy': <String, dynamic>{},
+    }, SetOptions(merge: true));
+  }
+
+  await requestRef.set({
+    'chatId': chatId,
+    'status': 'in_chat',
+    'acceptedHelpers': updatedHelpers,
+    'acceptedHelpersCount': updatedHelpers.length,
+    'acceptedBy': updatedHelpers.isNotEmpty ? updatedHelpers.first : helperUserId,
+    'acceptedAt': FieldValue.serverTimestamp(),
+    'updatedAt': FieldValue.serverTimestamp(),
+  }, SetOptions(merge: true));
+
+  await db.collection('users').doc(helperUserId).set({
+    'volunteerAcceptedCount': FieldValue.increment(1),
+    'updatedAt': FieldValue.serverTimestamp(),
+  }, SetOptions(merge: true));
+
+  return chatId;
+}
+
+Future<void> setMyOnlineStatus(bool isOnline) async {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return;
+
+  await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+    'isOnline': isOnline,
+    'lastSeenAt': FieldValue.serverTimestamp(),
+    'updatedAt': FieldValue.serverTimestamp(),
+  }, SetOptions(merge: true));
+}
+
+String formatLastSeen(Timestamp? ts) {
+  if (ts == null) return 'не в сети';
+
+  final dt = ts.toDate();
+  final diff = DateTime.now().difference(dt);
+
+  if (diff.inMinutes < 1) return 'только что';
+  if (diff.inMinutes < 60) return '${diff.inMinutes} мин назад';
+  if (diff.inHours < 24) return '${diff.inHours} ч назад';
+  return DateFormat('dd.MM.yyyy HH:mm').format(dt);
+}
 
 class RequestDocCard extends StatefulWidget {
   final String requestId;
@@ -5857,10 +7089,15 @@ class _RequestDocCardState extends State<RequestDocCard> {
 
     if (diff.isNegative) return 'Истекла';
     if (diff.inMinutes < 60) return '${diff.inMinutes} мин';
+    if (diff.inHours < 24) {
+      final hours = diff.inHours;
+      final minutes = diff.inMinutes % 60;
+      return '$hours ч $minutes мин';
+    }
 
-    final hours = diff.inHours;
-    final minutes = diff.inMinutes % 60;
-    return '$hours ч $minutes мин';
+    final days = diff.inDays;
+    final hours = diff.inHours % 24;
+    return '$days д $hours ч';
   }
 
   Future<void> _help() async {
@@ -5872,92 +7109,16 @@ class _RequestDocCardState extends State<RequestDocCard> {
     setState(() => _opening = true);
 
     try {
-      final db = FirebaseFirestore.instance;
-      final requestRef = db.collection('requests').doc(widget.requestId);
-
-      final requestSnap = await requestRef.get();
-
-      if (!requestSnap.exists) {
-        throw Exception('Заявка не найдена');
-      }
-
-      final data = requestSnap.data() as Map<String, dynamic>;
-
-      final authorId = (data['authorId'] ?? '').toString();
-      final status = (data['status'] ?? 'open').toString();
-      final helpersNeeded = (data['helpersNeeded'] is num)
-          ? (data['helpersNeeded'] as num).toInt()
-          : 1;
-      final acceptedHelpers = List<String>.from(data['acceptedHelpers'] ?? []);
-      final existingChatId = (data['chatId'] ?? '').toString();
-
-      if (authorId == me.uid) {
-        throw Exception('Нельзя откликнуться на свою заявку');
-      }
-
-      if (status == 'done' || status == 'cancelled' || status == 'expired') {
-        throw Exception('Заявка уже закрыта');
-      }
-
-      String chatId = existingChatId;
-
-      if (acceptedHelpers.length >= helpersNeeded &&
-          !acceptedHelpers.contains(me.uid)) {
-        throw Exception('Нужное количество помощников уже набрано');
-      }
-
-      final updatedHelpers = acceptedHelpers.contains(me.uid)
-          ? acceptedHelpers
-          : [...acceptedHelpers, me.uid];
-
-      if (chatId.isEmpty) {
-        final chatRef = db.collection('chats').doc();
-        chatId = chatRef.id;
-
-        await chatRef.set({
-          'chatId': chatId,
-          'requestId': widget.requestId,
-          'requestTitle': widget.title,
-          'requestCategory': widget.category,
-          'members': [authorId, ...updatedHelpers],
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-          'lastMessage': 'Чат создан',
-          'lastMessageAt': FieldValue.serverTimestamp(),
-        });
-
-        await chatRef.collection('messages').add({
-          'text': 'Чат по заявке создан',
-          'senderId': 'system',
-          'createdAt': FieldValue.serverTimestamp(),
-          'readBy': ['system'],
-          'deletedForAll': false,
-        });
-      } else {
-        await db.collection('chats').doc(chatId).set({
-          'members': FieldValue.arrayUnion([me.uid]),
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-      }
-
-      await requestRef.set({
-        'chatId': chatId,
-        'status': 'in_chat',
-        'acceptedHelpers': updatedHelpers,
-        'acceptedHelpersCount': updatedHelpers.length,
-        'acceptedBy': updatedHelpers.isNotEmpty ? updatedHelpers.first : me.uid,
-        'acceptedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      await db.collection('users').doc(me.uid).set({
-        'volunteerAcceptedCount': FieldValue.increment(1),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      final chatId = await ensureRequestChatAndJoin(
+        requestId: widget.requestId,
+        requestTitle: widget.title,
+        requestCategory: widget.category,
+        helperUserId: me.uid,
+      );
 
       if (!mounted) return;
 
-      Navigator.of(context).push(
+      await Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => ChatScreen(
             chatId: chatId,
@@ -6152,7 +7313,7 @@ class _RequestDocCardState extends State<RequestDocCard> {
                             ),
                       label: Text(
                         _opening
-                            ? 'Открываю...'
+                            ? 'Открываю чат...'
                             : stillNeeds
                                 ? 'Помочь'
                                 : 'Набрано',
@@ -6561,6 +7722,8 @@ class QuickActionsMenuButton extends StatefulWidget {
   final VoidCallback onOpenCreateRequest;
   final VoidCallback onOpenOrganizers;
   final VoidCallback onOpenRequests;
+  final VoidCallback onOpenPrograms;
+  final VoidCallback onOpenNews;
 
   const QuickActionsMenuButton({
     super.key,
@@ -6568,6 +7731,8 @@ class QuickActionsMenuButton extends StatefulWidget {
     required this.onOpenCreateRequest,
     required this.onOpenOrganizers,
     required this.onOpenRequests,
+    required this.onOpenPrograms,
+    required this.onOpenNews,
   });
 
   @override
@@ -6627,7 +7792,7 @@ class _QuickActionsMenuButtonState extends State<QuickActionsMenuButton>
             CompositedTransformFollower(
               link: _link,
               showWhenUnlinked: false,
-              offset: const Offset(-110, -288),
+              offset: const Offset(-118, -408),
               child: AnimatedBuilder(
                 animation: _curve,
                 builder: (_, __) {
@@ -6640,7 +7805,7 @@ class _QuickActionsMenuButtonState extends State<QuickActionsMenuButton>
                         child: Material(
                           color: Colors.transparent,
                           child: Container(
-                            width: 278,
+                            width: 292,
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
                               color: sheetColor,
@@ -6698,6 +7863,32 @@ class _QuickActionsMenuButtonState extends State<QuickActionsMenuButton>
                                   onTap: () {
                                     _close();
                                     widget.onOpenEvents();
+                                  },
+                                ),
+                                _QuickActionTile(
+                                  icon: Icons.dashboard_customize_outlined,
+                                  iconBg: const Color(0xFFEDE9FE),
+                                  iconColor: const Color(0xFF5B21B6),
+                                  title: 'Programs',
+                                  subtitle: 'Программы и направления',
+                                  textColor: textColor,
+                                  subColor: subColor,
+                                  onTap: () {
+                                    _close();
+                                    widget.onOpenPrograms();
+                                  },
+                                ),
+                                _QuickActionTile(
+                                  icon: Icons.newspaper_rounded,
+                                  iconBg: const Color(0xFFFFF1D6),
+                                  iconColor: const Color(0xFF9A6700),
+                                  title: 'News',
+                                  subtitle: 'Новости платформы',
+                                  textColor: textColor,
+                                  subColor: subColor,
+                                  onTap: () {
+                                    _close();
+                                    widget.onOpenNews();
                                   },
                                 ),
                                 _QuickActionTile(
@@ -7449,6 +8640,7 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
   final _desc = TextEditingController();
 
   String _category = 'Еда';
+  String _assistanceType = 'Физическая помощь';
   bool _busy = false;
   int _hoursToLive = 24;
   int _helpersNeeded = 1;
@@ -7512,6 +8704,7 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
         'title': t,
         'description': d,
         'category': _category,
+        'assistanceType': _assistanceType,
         'city': _selectedCity,
         'urgent': autoUrgent,
         'durationHours': hours,
@@ -7586,6 +8779,27 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
+                      value: _assistanceType,
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'Физическая помощь',
+                          child: Text('Физическая помощь'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Интеллектуальная помощь',
+                          child: Text('Интеллектуальная помощь'),
+                        ),
+                      ],
+                      onChanged: (v) {
+                        setState(() => _assistanceType = v ?? 'Физическая помощь');
+                      },
+                      decoration: const InputDecoration(
+                        labelText: 'Общий тип помощи',
+                        prefixIcon: Icon(Icons.psychology_alt_outlined),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
                       value: _category,
                       items: const [
                         DropdownMenuItem(value: 'Еда', child: Text('Еда')),
@@ -7594,10 +8808,12 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
                         DropdownMenuItem(value: 'Техника', child: Text('Техника')),
                         DropdownMenuItem(value: 'Разговор', child: Text('Разговор')),
                         DropdownMenuItem(value: 'Животные', child: Text('Животные')),
+                        DropdownMenuItem(value: 'Документы', child: Text('Документы')),
+                        DropdownMenuItem(value: 'Перевозка', child: Text('Перевозка')),
                       ],
                       onChanged: (v) => setState(() => _category = v ?? 'Еда'),
                       decoration: const InputDecoration(
-                        labelText: 'Категория',
+                        labelText: 'Подкатегория',
                         prefixIcon: Icon(Icons.category_outlined),
                       ),
                     ),
@@ -7671,6 +8887,8 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
                               DropdownMenuItem(value: 6, child: Text('6 ч')),
                               DropdownMenuItem(value: 12, child: Text('12 ч')),
                               DropdownMenuItem(value: 24, child: Text('1 день')),
+                              DropdownMenuItem(value: 48, child: Text('2 дня')),
+                              DropdownMenuItem(value: 72, child: Text('3 дня')),
                             ],
                             onChanged: (v) =>
                                 setState(() => _hoursToLive = v ?? 24),
@@ -10095,6 +11313,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   bool _sending = false;
   bool _markingRead = false;
   bool _sendingLocation = false;
+  Timer? _typingTimer;
 
   @override
   void initState() {
@@ -10102,13 +11321,20 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await setMyOnlineStatus(true);
       await _markChatAsRead();
     });
+
+    _msg.addListener(_handleTypingChanged);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _typingTimer?.cancel();
+    _msg.removeListener(_handleTypingChanged);
+    _setTyping(false);
+    setMyOnlineStatus(false);
     _msg.dispose();
     _scroll.dispose();
     super.dispose();
@@ -10117,8 +11343,42 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      setMyOnlineStatus(true);
       _markChatAsRead();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      setMyOnlineStatus(false);
+      _setTyping(false);
     }
+  }
+
+  void _handleTypingChanged() {
+    if (_msg.text.trim().isEmpty) {
+      _setTyping(false);
+      _typingTimer?.cancel();
+      return;
+    }
+
+    _setTyping(true);
+    _typingTimer?.cancel();
+    _typingTimer = Timer(const Duration(seconds: 2), () {
+      _setTyping(false);
+    });
+  }
+
+  Future<void> _setTyping(bool value) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      await FirebaseFirestore.instance.collection('chats').doc(widget.chatId).set({
+        'typingBy': {
+          user.uid: value,
+        },
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (_) {}
   }
 
   Future<void> _markChatAsRead() async {
@@ -10202,52 +11462,54 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       final chatData = chatSnap.data() ?? {};
       final members = List<String>.from(chatData['members'] ?? []);
 
+      final meSnap =
+          await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final myName = (meSnap.data()?['name'] ?? 'Без имени').toString();
+
       await chatRef.collection('messages').add({
         'type': 'text',
         'text': text,
         'senderId': user.uid,
+        'senderName': myName,
         'createdAt': FieldValue.serverTimestamp(),
         'readBy': [user.uid],
         'deletedForAll': false,
-      }).timeout(const Duration(seconds: 10));
+      });
 
-      final updateData = <String, dynamic>{
-        'lastMessage': text,
-        'lastMessageType': 'text',
-        'lastMessageAt': FieldValue.serverTimestamp(),
-        'unreadCountMap.${user.uid}': 0,
-      };
-
+      final unreadMap = <String, dynamic>{};
       for (final memberId in members) {
-        if (memberId != user.uid) {
-          updateData['unreadCountMap.$memberId'] = FieldValue.increment(1);
-        }
+        if (memberId == user.uid || memberId == 'system') continue;
+        unreadMap[memberId] = FieldValue.increment(1);
       }
 
-      await chatRef.set(updateData, SetOptions(merge: true)).timeout(const Duration(seconds: 10));
+      await chatRef.set({
+        'lastMessage': text,
+        'lastMessageAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'typingBy': {user.uid: false},
+        if (unreadMap.isNotEmpty) 'unreadCountMap': unreadMap,
+      }, SetOptions(merge: true));
 
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'chatMessagesCount': FieldValue.increment(1),
+        'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
-      final achievementText =
-          await AchievementService().checkAfterFirstChatMessage();
+      await _setTyping(false);
 
-      if (achievementText != null && mounted) {
-        AppNotice.show(
-          context,
-          message: achievementText,
-          type: AppNoticeType.success,
+      if (_scroll.hasClients) {
+        await Future.delayed(const Duration(milliseconds: 120));
+        _scroll.animateTo(
+          _scroll.position.maxScrollExtent + 120,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
         );
       }
-
-      await _markChatAsRead();
-      _scrollToBottomSoon();
     } catch (e) {
       if (!mounted) return;
       AppNotice.show(
         context,
-        message: 'Не отправилось: $e',
+        message: 'Ошибка отправки: $e',
         type: AppNoticeType.error,
       );
     } finally {
@@ -10255,402 +11517,284 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _sendLocation({
-    required String requestStatus,
-  }) async {
-    if (_sendingLocation) return;
-
-    if (requestStatus != 'in_chat' && requestStatus != 'open') {
-      AppNotice.show(
-        context,
-        message: 'Заявка уже закрыта. Чат только для чтения',
-        type: AppNoticeType.info,
-      );
-      return;
-    }
-
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    setState(() => _sendingLocation = true);
-
-    try {
-      final location = await AppLocationService().getCurrentLocationWithCity();
-
-      if (!location.ok || location.lat == null || location.lng == null) {
-        if (!mounted) return;
-        AppNotice.show(
-          context,
-          message: location.error ?? 'Не удалось получить геолокацию',
-          type: AppNoticeType.error,
-        );
-        return;
-      }
-
-      final chatRef = FirebaseFirestore.instance.collection('chats').doc(widget.chatId);
-      final chatSnap = await chatRef.get();
-      final chatData = chatSnap.data() ?? {};
-      final members = List<String>.from(chatData['members'] ?? []);
-
-      final cityText = (location.city ?? 'Неизвестно').trim();
-      final previewText = cityText.isEmpty ? 'Геолокация' : 'Геолокация: $cityText';
-
-      await chatRef.collection('messages').add({
-        'type': 'location',
-        'text': previewText,
-        'senderId': user.uid,
-        'createdAt': FieldValue.serverTimestamp(),
-        'readBy': [user.uid],
-        'deletedForAll': false,
-        'lat': location.lat,
-        'lng': location.lng,
-        'city': cityText,
-      });
-
-      final updateData = <String, dynamic>{
-        'lastMessage': '📍 $previewText',
-        'lastMessageType': 'location',
-        'lastMessageAt': FieldValue.serverTimestamp(),
-        'unreadCountMap.${user.uid}': 0,
-      };
-
-      for (final memberId in members) {
-        if (memberId != user.uid) {
-          updateData['unreadCountMap.$memberId'] = FieldValue.increment(1);
-        }
-      }
-
-      await chatRef.set(updateData, SetOptions(merge: true));
-
-      if (!mounted) return;
-      AppNotice.show(
-        context,
-        message: 'Геолокация отправлена',
-        type: AppNoticeType.success,
-      );
-
-      await _markChatAsRead();
-      _scrollToBottomSoon();
-    } catch (e) {
-      if (!mounted) return;
-      AppNotice.show(
-        context,
-        message: 'Ошибка отправки геолокации: $e',
-        type: AppNoticeType.error,
-      );
-    } finally {
-      if (mounted) setState(() => _sendingLocation = false);
-    }
-  }
-
-  Future<void> _deleteMessage({
-    required String messageId,
-  }) async {
-    try {
-      final ref = FirebaseFirestore.instance
-          .collection('chats')
-          .doc(widget.chatId)
-          .collection('messages')
-          .doc(messageId);
-
-      await ref.set({
-        'deletedForAll': true,
-        'deletedAt': FieldValue.serverTimestamp(),
-        'text': '',
-        'type': 'deleted',
-      }, SetOptions(merge: true));
-
-      if (!mounted) return;
-      AppNotice.show(
-        context,
-        message: 'Сообщение удалено',
-        type: AppNoticeType.success,
-      );
-    } catch (e) {
-      if (!mounted) return;
-      AppNotice.show(
-        context,
-        message: 'Ошибка удаления: $e',
-        type: AppNoticeType.error,
-      );
-    }
-  }
-
-  Future<void> _confirmDeleteMessage({
-    required String messageId,
-  }) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Удалить сообщение?'),
-        content: const Text('Сообщение исчезнет у всех участников чата.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Удалить'),
-          ),
-        ],
-      ),
-    );
-
-    if (ok == true) {
-      await _deleteMessage(messageId: messageId);
-    }
-  }
-
-  void _scrollToBottomSoon() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scroll.hasClients) return;
-      _scroll.animateTo(
-        _scroll.position.maxScrollExtent + 120,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOut,
-      );
-    });
-  }
-
-  Future<void> _reportChat({
-    required String requestId,
-    required String otherUserId,
-  }) async {
-    final reason = await showDialog<String>(
-      context: context,
-      builder: (_) => const ReportDialog(
-        title: 'Пожаловаться на пользователя',
-      ),
-    );
-
-    if (reason == null || reason.trim().isEmpty) return;
-
-    try {
-      final me = FirebaseAuth.instance.currentUser;
-      await FirebaseFirestore.instance.collection('reports').add({
-        'type': 'chat',
-        'chatId': widget.chatId,
-        'requestId': requestId,
-        'reportedUserId': otherUserId,
-        'reason': reason.trim(),
-        'createdBy': me?.uid,
-        'createdByEmail': me?.email ?? '',
-        'createdAt': FieldValue.serverTimestamp(),
-        'status': 'new',
-      });
-
-      if (!mounted) return;
-      AppNotice.show(
-        context,
-        message: 'Жалоба отправлена',
-        type: AppNoticeType.success,
-      );
-    } catch (e) {
-      if (!mounted) return;
-      AppNotice.show(
-        context,
-        message: 'Ошибка отправки жалобы: $e',
-        type: AppNoticeType.error,
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-    final myId = user?.uid;
+    final me = FirebaseAuth.instance.currentUser;
+    if (me == null) {
+      return Scaffold(
+        appBar: AppBar(title: Text(widget.title)),
+        body: const Center(child: Text('Нужно войти в аккаунт')),
+      );
+    }
 
-    final messagesQuery = FirebaseFirestore.instance
-        .collection('chats')
-        .doc(widget.chatId)
-        .collection('messages')
-        .orderBy('createdAt', descending: false);
+    final chatRef = FirebaseFirestore.instance.collection('chats').doc(widget.chatId);
 
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('chats')
-          .doc(widget.chatId)
-          .snapshots(),
+      stream: chatRef.snapshots(),
       builder: (context, chatSnap) {
-        final chatData = chatSnap.data?.data() ?? {};
-        final members = List<String>.from(chatData['members'] ?? []);
-        final requestId = (chatData['requestId'] ?? '').toString();
-
-        String? otherUserId;
-        for (final id in members) {
-          if (id != myId) {
-            otherUserId = id;
-            break;
-          }
-        }
-
-        if (requestId.isEmpty) {
+        if (!chatSnap.hasData) {
           return Scaffold(
             appBar: AppBar(title: Text(widget.title)),
-            body: const Center(child: Text('Чат не найден')),
+            body: const Center(child: LeafSpinner(size: 28)),
           );
         }
 
-        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance
-              .collection('requests')
-              .doc(requestId)
-              .snapshots(),
+        final chatData = chatSnap.data!.data() ?? {};
+        final requestId = (chatData['requestId'] ?? '').toString();
+        final members = List<String>.from(chatData['members'] ?? []);
+        final typingBy = Map<String, dynamic>.from(chatData['typingBy'] ?? {});
+        final otherUserId = members.where((e) => e != me.uid && e != 'system').isNotEmpty
+            ? members.where((e) => e != me.uid && e != 'system').first
+            : '';
+
+        final requestStream = requestId.isEmpty
+            ? Stream.value(null)
+            : FirebaseFirestore.instance.collection('requests').doc(requestId).snapshots();
+
+        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>?>(
+          stream: requestStream,
           builder: (context, requestSnap) {
             final requestData = requestSnap.data?.data() ?? {};
-            final requestStatus = (requestData['status'] ?? '').toString();
-            final readOnly = requestStatus != 'in_chat' && requestStatus != 'open';
+            final requestStatus = (requestData['status'] ?? 'open').toString();
 
-            return Scaffold(
-              appBar: AppBar(
-                title: otherUserId == null
-                    ? Text(widget.title)
-                    : UserMiniProfileButton(
-                        userId: otherUserId,
-                        compact: true,
-                      ),
-                actions: [
-                  if (otherUserId != null)
-                    IconButton(
-                      tooltip: 'Пожаловаться',
-                      onPressed: () => _reportChat(
-                        requestId: requestId,
-                        otherUserId: otherUserId!,
-                      ),
-                      icon: const Icon(Icons.flag_outlined),
-                    ),
-                ],
-              ),
-              body: Column(
-                children: [
-                  if (readOnly)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      color: const Color(0xFFFFF3CD),
-                      child: const Text(
-                        'Заявка закрыта. Чат доступен только для чтения.',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF7A5C00),
-                        ),
-                      ),
-                    ),
+            return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              stream: otherUserId.isEmpty
+                  ? null
+                  : FirebaseFirestore.instance.collection('users').doc(otherUserId).snapshots(),
+              builder: (context, otherSnap) {
+                final otherData = otherSnap.data?.data() ?? {};
+                final otherName = (otherData['name'] ?? widget.title).toString();
+                final otherAvatarUrl = (otherData['avatarUrl'] ?? '').toString();
+                final otherOnline = otherData['isOnline'] == true;
+                final otherLastSeen = otherData['lastSeenAt'] as Timestamp?;
+                final otherTyping = typingBy[otherUserId] == true;
 
-                  if (!readOnly &&
-                      myId != null &&
-                      myId != (requestData['authorId'] ?? '').toString() &&
-                      List<String>.from(requestData['acceptedHelpers'] ?? []).contains(myId))
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                      alignment: Alignment.centerLeft,
-                      child: TextButton.icon(
-                        onPressed: () => cancelAcceptedRequestByVolunteer(
-                          context: context,
-                          requestId: requestId,
-                        ),
-                        icon: const Icon(Icons.exit_to_app),
-                        label: const Text('Отказаться от заявки'),
-                      ),
-                    ),
-
-                  Expanded(
-                    child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                      stream: messagesQuery.snapshots(),
-                      builder: (context, snap) {
-                        if (!snap.hasData) {
-                          return const Center(child: LeafSpinner(size: 30));
-                        }
-
-                        final docs = snap.data!.docs;
-
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          _markChatAsRead();
-                        });
-
-                        if (docs.isEmpty) {
-                          return const Center(
-                            child: Text('Сообщений пока нет'),
-                          );
-                        }
-
-                        return ListView.builder(
-                          controller: _scroll,
-                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-                          itemCount: docs.length,
-                          itemBuilder: (context, i) {
-                            final doc = docs[i];
-                            final data = doc.data();
-
-                            final senderId = (data['senderId'] ?? '').toString();
-                            final isMine = senderId == myId;
-                            final type = (data['type'] ?? 'text').toString();
-                            final deletedForAll = data['deletedForAll'] == true;
-
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 10),
-                              child: _ChatMessageTile(
-                                messageId: doc.id,
-                                data: data,
-                                isMine: isMine,
-                                isGroupChat: members.length > 2,
-                                otherMemberIds: members.where((e) => e != myId).toList(),
-                                onDelete: deletedForAll || !isMine || senderId == 'system'
-                                    ? null
-                                    : () => _confirmDeleteMessage(messageId: doc.id),
-                              ),
-                            );
-                          },
-                        );
-                      },
+                return Scaffold(
+                  appBar: AppBar(
+                    titleSpacing: 0,
+                    title: Row(
+                      children: [
+                        if (otherUserId.isNotEmpty)
+                          InkWell(
+                            borderRadius: BorderRadius.circular(999),
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => PublicProfileScreen(userId: otherUserId),
+                                ),
+                              );
+                            },
+                            child: Row(
+                              children: [
+                                Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 18,
+                                      backgroundColor: const Color(0xFFC8F0A4),
+                                      backgroundImage: otherAvatarUrl.isNotEmpty
+                                          ? NetworkImage(otherAvatarUrl)
+                                          : null,
+                                      child: otherAvatarUrl.isEmpty
+                                          ? const Icon(Icons.person, size: 18)
+                                          : null,
+                                    ),
+                                    Positioned(
+                                      right: -1,
+                                      bottom: -1,
+                                      child: Container(
+                                        width: 10,
+                                        height: 10,
+                                        decoration: BoxDecoration(
+                                          color: otherOnline
+                                              ? const Color(0xFF22C55E)
+                                              : const Color(0xFF94A3B8),
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: Colors.white, width: 1.2),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(width: 10),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      otherName,
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    Text(
+                                      otherTyping
+                                          ? 'печатает...'
+                                          : otherOnline
+                                              ? 'в сети'
+                                              : formatLastSeen(otherLastSeen),
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: otherTyping
+                                            ? const Color(0xFF22C55E)
+                                            : Theme.of(context).textTheme.bodySmall?.color,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          )
+                        else
+                          Text(widget.title),
+                      ],
                     ),
                   ),
-                  SafeArea(
-                    top: false,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                      child: Row(
-                        children: [
-                          IconButton(
-                            tooltip: 'Отправить геолокацию',
-                            onPressed: (readOnly || _sendingLocation || _sending)
-                                ? null
-                                : () => _sendLocation(requestStatus: requestStatus),
-                            icon: _sendingLocation
-                                ? const LeafSpinner(size: 20)
-                                : const Icon(Icons.location_on_outlined),
-                          ),
-                          Expanded(
-                            child: TextField(
-                              controller: _msg,
-                              minLines: 1,
-                              maxLines: 5,
-                              enabled: !readOnly && !_sending,
-                              onSubmitted: (_) => _sendText(requestStatus: requestStatus),
-                              decoration: InputDecoration(
-                                hintText: readOnly
-                                    ? 'Чат закрыт'
-                                    : 'Напиши сообщение...',
-                              ),
+                  body: Column(
+                    children: [
+                      if (requestStatus != 'in_chat' && requestStatus != 'open')
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          color: Colors.orange.withOpacity(0.12),
+                          child: const Text(
+                            'Заявка закрыта. Чат доступен только для чтения.',
+                            style: TextStyle(
+                              color: Colors.orange,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          FilledButton(
-                            onPressed: (readOnly || _sending || _sendingLocation)
-                                ? null
-                                : () => _sendText(requestStatus: requestStatus),
-                            child: _sending
-                                ? const LeafSpinner(size: 18, color: Colors.white)
-                                : const Icon(Icons.send_rounded),
-                          ),
-                        ],
+                        ),
+                      Expanded(
+                        child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                          stream: chatRef
+                              .collection('messages')
+                              .orderBy('createdAt')
+                              .snapshots(),
+                          builder: (context, snap) {
+                            if (!snap.hasData) {
+                              return const Center(child: LeafSpinner(size: 28));
+                            }
+
+                            final docs = snap.data!.docs;
+
+                            if (docs.isEmpty) {
+                              return const Center(
+                                child: Text('Сообщений пока нет'),
+                              );
+                            }
+
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (_scroll.hasClients) {
+                                _scroll.jumpTo(_scroll.position.maxScrollExtent);
+                              }
+                            });
+
+                            return ListView.builder(
+                              controller: _scroll,
+                              padding: const EdgeInsets.all(12),
+                              itemCount: docs.length,
+                              itemBuilder: (context, i) {
+                                final data = docs[i].data();
+                                final senderId = (data['senderId'] ?? '').toString();
+                                final senderName = (data['senderName'] ?? '').toString();
+                                final text = (data['text'] ?? '').toString();
+                                final isSystem = senderId == 'system';
+                                final isMine = senderId == me.uid;
+
+                                return Align(
+                                  alignment: isSystem
+                                      ? Alignment.center
+                                      : isMine
+                                          ? Alignment.centerRight
+                                          : Alignment.centerLeft,
+                                  child: Container(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 10,
+                                    ),
+                                    constraints: const BoxConstraints(maxWidth: 320),
+                                    decoration: BoxDecoration(
+                                      color: isSystem
+                                          ? const Color(0xFFE8EEF8)
+                                          : isMine
+                                              ? const Color(0xFFA8E932)
+                                              : const Color(0xFF1E2A4A),
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        if (!isMine && !isSystem && senderName.isNotEmpty)
+                                          Padding(
+                                            padding: const EdgeInsets.only(bottom: 4),
+                                            child: Text(
+                                              senderName,
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w700,
+                                                color: Color(0xFFA5B4FC),
+                                              ),
+                                            ),
+                                          ),
+                                        Text(
+                                          text,
+                                          style: TextStyle(
+                                            color: isSystem
+                                                ? const Color(0xFF24324A)
+                                                : isMine
+                                                    ? Colors.black
+                                                    : Colors.white,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        ),
                       ),
-                    ),
+                      SafeArea(
+                        top: false,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _msg,
+                                  enabled: !_sending &&
+                                      !_sendingLocation &&
+                                      (requestStatus == 'in_chat' || requestStatus == 'open'),
+                                  decoration: const InputDecoration(
+                                    hintText: 'Сообщение...',
+                                  ),
+                                  onSubmitted: (_) => _sendText(requestStatus: requestStatus),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              FilledButton(
+                                onPressed: (!_sending &&
+                                        !_sendingLocation &&
+                                        (requestStatus == 'in_chat' || requestStatus == 'open'))
+                                    ? () => _sendText(requestStatus: requestStatus)
+                                    : null,
+                                child: _sending
+                                    ? const LeafSpinner(size: 18, color: Colors.white)
+                                    : const Icon(Icons.send),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                );
+              },
             );
           },
         );
