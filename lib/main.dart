@@ -7697,6 +7697,7 @@ class _RequestDocCardState extends State<RequestDocCard> {
     final me = FirebaseAuth.instance.currentUser;
     if (me == null) return;
 
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _opening = true);
 
     try {
@@ -7709,7 +7710,17 @@ class _RequestDocCardState extends State<RequestDocCard> {
 
       if (!mounted) return;
 
-      await Navigator.of(context).push(
+      AppNotice.show(
+        context,
+        message: 'Открываю чат...',
+        type: AppNoticeType.success,
+        duration: const Duration(milliseconds: 900),
+      );
+
+      await Future.delayed(const Duration(milliseconds: 120));
+      if (!mounted) return;
+
+      await Navigator.of(context, rootNavigator: true).push(
         MaterialPageRoute(
           builder: (_) => ChatScreen(
             chatId: chatId,
@@ -11890,6 +11901,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
+  void _scrollToBottomSoon() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scroll.hasClients) return;
+      _scroll.animateTo(
+        _scroll.position.maxScrollExtent + 120,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
   void _handleTypingChanged() {
     if (_msg.text.trim().isEmpty) {
       _setTyping(false);
@@ -11910,9 +11932,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
     try {
       await FirebaseFirestore.instance.collection('chats').doc(widget.chatId).set({
-        'typingBy': {
-          user.uid: value,
-        },
+        'typingBy': {user.uid: value},
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     } catch (_) {}
@@ -11974,7 +11994,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Future<void> _sendText({
     required String requestStatus,
   }) async {
-    if (requestStatus != 'in_chat' && requestStatus != 'open') {
+    if (requestStatus != 'in_chat' && requestStatus != 'open' && requestStatus != 'completion_pending') {
       AppNotice.show(
         context,
         message: 'Заявка уже закрыта. Чат только для чтения',
@@ -12013,40 +12033,45 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         'deletedForAll': false,
       });
 
-      final unreadMap = <String, dynamic>{};
-      for (final memberId in members) {
-        if (memberId == user.uid || memberId == 'system') continue;
-        unreadMap[memberId] = FieldValue.increment(1);
-      }
-
-      await chatRef.set({
+      final updateData = <String, dynamic>{
         'lastMessage': text,
+        'lastMessageType': 'text',
         'lastMessageAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
         'typingBy': {user.uid: false},
-        if (unreadMap.isNotEmpty) 'unreadCountMap': unreadMap,
-      }, SetOptions(merge: true));
+        'unreadCountMap.${user.uid}': 0,
+      };
+
+      for (final memberId in members) {
+        if (memberId != user.uid && memberId != 'system') {
+          updateData['unreadCountMap.$memberId'] = FieldValue.increment(1);
+        }
+      }
+
+      await chatRef.set(updateData, SetOptions(merge: true));
 
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'chatMessagesCount': FieldValue.increment(1),
-        'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
-      await _setTyping(false);
+      final achievementText =
+          await AchievementService().checkAfterFirstChatMessage();
 
-      if (_scroll.hasClients) {
-        await Future.delayed(const Duration(milliseconds: 120));
-        _scroll.animateTo(
-          _scroll.position.maxScrollExtent + 120,
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOut,
+      if (achievementText != null && mounted) {
+        AppNotice.show(
+          context,
+          message: achievementText,
+          type: AppNoticeType.success,
         );
       }
+
+      await _markChatAsRead();
+      _scrollToBottomSoon();
     } catch (e) {
       if (!mounted) return;
       AppNotice.show(
         context,
-        message: 'Ошибка отправки: $e',
+        message: 'Не отправилось: $e',
         type: AppNoticeType.error,
       );
     } finally {
@@ -12054,284 +12079,349 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final me = FirebaseAuth.instance.currentUser;
-    if (me == null) {
-      return Scaffold(
-        appBar: AppBar(title: Text(widget.title)),
-        body: const Center(child: Text('Нужно войти в аккаунт')),
+  Future<void> _sendLocation({
+    required String requestStatus,
+  }) async {
+    if (_sendingLocation) return;
+
+    if (requestStatus != 'in_chat' && requestStatus != 'open' && requestStatus != 'completion_pending') {
+      AppNotice.show(
+        context,
+        message: 'Заявка уже закрыта. Чат только для чтения',
+        type: AppNoticeType.info,
       );
+      return;
     }
 
-    final chatRef = FirebaseFirestore.instance.collection('chats').doc(widget.chatId);
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    setState(() => _sendingLocation = true);
+
+    try {
+      final loc = await AppLocationService().getCurrentLocationWithCity();
+      if (!loc.ok) {
+        throw Exception(loc.error ?? 'Не удалось получить геолокацию');
+      }
+
+      final chatRef = FirebaseFirestore.instance.collection('chats').doc(widget.chatId);
+      final chatSnap = await chatRef.get();
+      final chatData = chatSnap.data() ?? {};
+      final members = List<String>.from(chatData['members'] ?? []);
+
+      final meSnap =
+          await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final myName = (meSnap.data()?['name'] ?? 'Без имени').toString();
+
+      final city = normalizeCity(loc.city);
+
+      await chatRef.collection('messages').add({
+        'type': 'location',
+        'text': city,
+        'city': city,
+        'lat': loc.lat,
+        'lng': loc.lng,
+        'senderId': user.uid,
+        'senderName': myName,
+        'createdAt': FieldValue.serverTimestamp(),
+        'readBy': [user.uid],
+        'deletedForAll': false,
+      });
+
+      final updateData = <String, dynamic>{
+        'lastMessage': '📍 Геолокация',
+        'lastMessageType': 'location',
+        'lastMessageAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'unreadCountMap.${user.uid}': 0,
+      };
+
+      for (final memberId in members) {
+        if (memberId != user.uid && memberId != 'system') {
+          updateData['unreadCountMap.$memberId'] = FieldValue.increment(1);
+        }
+      }
+
+      await chatRef.set(updateData, SetOptions(merge: true));
+
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'chatMessagesCount': FieldValue.increment(1),
+      }, SetOptions(merge: true));
+
+      final achievementText =
+          await AchievementService().checkAfterFirstChatMessage();
+
+      if (achievementText != null && mounted) {
+        AppNotice.show(
+          context,
+          message: achievementText,
+          type: AppNoticeType.success,
+        );
+      }
+
+      await _markChatAsRead();
+      _scrollToBottomSoon();
+    } catch (e) {
+      if (!mounted) return;
+      AppNotice.show(
+        context,
+        message: 'Не удалось отправить геолокацию: $e',
+        type: AppNoticeType.error,
+      );
+    } finally {
+      if (mounted) setState(() => _sendingLocation = false);
+    }
+  }
+
+  Future<void> _deleteMessageForAll(String messageId) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('chats')
+          .doc(widget.chatId)
+          .collection('messages')
+          .doc(messageId)
+          .set({
+        'deletedForAll': true,
+        'type': 'deleted',
+        'text': 'Сообщение удалено',
+      }, SetOptions(merge: true));
+    } catch (e) {
+      if (!mounted) return;
+      AppNotice.show(
+        context,
+        message: 'Не удалось удалить сообщение: $e',
+        type: AppNoticeType.error,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final myId = FirebaseAuth.instance.currentUser!.uid;
+
+    final chatStream = FirebaseFirestore.instance
+        .collection('chats')
+        .doc(widget.chatId)
+        .snapshots();
+
+    final messagesStream = FirebaseFirestore.instance
+        .collection('chats')
+        .doc(widget.chatId)
+        .collection('messages')
+        .orderBy('createdAt')
+        .snapshots();
 
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: chatRef.snapshots(),
+      stream: chatStream,
       builder: (context, chatSnap) {
         if (!chatSnap.hasData) {
-          return Scaffold(
-            appBar: AppBar(title: Text(widget.title)),
-            body: const Center(child: LeafSpinner(size: 28)),
+          return const Scaffold(
+            body: Center(child: LeafSpinner(size: 28)),
           );
         }
 
         final chatData = chatSnap.data!.data() ?? {};
-        final requestId = (chatData['requestId'] ?? '').toString();
         final members = List<String>.from(chatData['members'] ?? []);
+        final otherMemberIds = members.where((e) => e != myId && e != 'system').toList();
+        final requestId = (chatData['requestId'] ?? '').toString();
         final typingBy = Map<String, dynamic>.from(chatData['typingBy'] ?? {});
-        final otherUserId = members.where((e) => e != me.uid && e != 'system').isNotEmpty
-            ? members.where((e) => e != me.uid && e != 'system').first
-            : '';
+        final typingOtherIds = typingBy.entries
+            .where((e) => e.key != myId && e.value == true)
+            .map((e) => e.key)
+            .toList();
 
         final requestStream = requestId.isEmpty
-            ? Stream.value(null)
+            ? Stream<DocumentSnapshot<Map<String, dynamic>>>.value(
+                null as dynamic,
+              )
             : FirebaseFirestore.instance.collection('requests').doc(requestId).snapshots();
 
-        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>?>(
+        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
           stream: requestStream,
           builder: (context, requestSnap) {
             final requestData = requestSnap.data?.data() ?? {};
             final requestStatus = (requestData['status'] ?? 'open').toString();
 
-            return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-              stream: otherUserId.isEmpty
-                  ? null
-                  : FirebaseFirestore.instance.collection('users').doc(otherUserId).snapshots(),
-              builder: (context, otherSnap) {
-                final otherData = otherSnap.data?.data() ?? {};
-                final otherName = (otherData['name'] ?? widget.title).toString();
-                final otherAvatarUrl = (otherData['avatarUrl'] ?? '').toString();
-                final otherOnline = otherData['isOnline'] == true;
-                final otherLastSeen = otherData['lastSeenAt'] as Timestamp?;
-                final otherTyping = typingBy[otherUserId] == true;
+            return Scaffold(
+              appBar: AppBar(
+                title: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(widget.title),
+                    if (typingOtherIds.isNotEmpty)
+                      const Text(
+                        'печатает...',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF6B7280),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              body: Column(
+                children: [
+                  if (requestStatus == 'done' ||
+                      requestStatus == 'cancelled' ||
+                      requestStatus == 'expired')
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      color: Colors.red.withOpacity(0.10),
+                      child: const Text(
+                        'Заявка закрыта. Чат доступен только для чтения.',
+                        style: TextStyle(
+                          color: Colors.red,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  if (otherMemberIds.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: otherMemberIds.map((uid) {
+                          return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                            stream: FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(uid)
+                                .snapshots(),
+                            builder: (context, userSnap) {
+                              final data = userSnap.data?.data() ?? {};
+                              final isOnline = data['isOnline'] == true;
+                              final lastSeenAt = data['lastSeenAt'] as Timestamp?;
+                              final text = isOnline
+                                  ? 'в сети'
+                                  : formatLastSeen(lastSeenAt);
 
-                return Scaffold(
-                  appBar: AppBar(
-                    titleSpacing: 0,
-                    title: Row(
-                      children: [
-                        if (otherUserId.isNotEmpty)
-                          InkWell(
-                            borderRadius: BorderRadius.circular(999),
-                            onTap: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => PublicProfileScreen(userId: otherUserId),
+                              return Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).brightness == Brightness.dark
+                                      ? Colors.white.withOpacity(0.08)
+                                      : Colors.black.withOpacity(0.05),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    UserMiniProfileButton(userId: uid, compact: true),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      text,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: isOnline
+                                            ? const Color(0xFF22C55E)
+                                            : const Color(0xFF94A3B8),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               );
                             },
-                            child: Row(
-                              children: [
-                                Stack(
-                                  clipBehavior: Clip.none,
-                                  children: [
-                                    CircleAvatar(
-                                      radius: 18,
-                                      backgroundColor: const Color(0xFFC8F0A4),
-                                      backgroundImage: otherAvatarUrl.isNotEmpty
-                                          ? NetworkImage(otherAvatarUrl)
-                                          : null,
-                                      child: otherAvatarUrl.isEmpty
-                                          ? const Icon(Icons.person, size: 18)
-                                          : null,
-                                    ),
-                                    Positioned(
-                                      right: -1,
-                                      bottom: -1,
-                                      child: Container(
-                                        width: 10,
-                                        height: 10,
-                                        decoration: BoxDecoration(
-                                          color: otherOnline
-                                              ? const Color(0xFF22C55E)
-                                              : const Color(0xFF94A3B8),
-                                          shape: BoxShape.circle,
-                                          border: Border.all(color: Colors.white, width: 1.2),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(width: 10),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      otherName,
-                                      style: const TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    Text(
-                                      otherTyping
-                                          ? 'печатает...'
-                                          : otherOnline
-                                              ? 'в сети'
-                                              : formatLastSeen(otherLastSeen),
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: otherTyping
-                                            ? const Color(0xFF22C55E)
-                                            : Theme.of(context).textTheme.bodySmall?.color,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          )
-                        else
-                          Text(widget.title),
-                      ],
+                          );
+                        }).toList(),
+                      ),
                     ),
-                  ),
-                  body: Column(
-                    children: [
-                      if (requestStatus != 'in_chat' && requestStatus != 'open')
-                        Container(
-                          width: double.infinity,
+                  Expanded(
+                    child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: messagesStream,
+                      builder: (context, snap) {
+                        if (!snap.hasData) {
+                          return const Center(child: LeafSpinner(size: 28));
+                        }
+
+                        final docs = snap.data!.docs;
+
+                        if (docs.isEmpty) {
+                          return const Center(
+                            child: Text('Сообщений пока нет'),
+                          );
+                        }
+
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          _scrollToBottomSoon();
+                        });
+
+                        return ListView.builder(
+                          controller: _scroll,
                           padding: const EdgeInsets.all(12),
-                          color: Colors.orange.withOpacity(0.12),
-                          child: const Text(
-                            'Заявка закрыта. Чат доступен только для чтения.',
-                            style: TextStyle(
-                              color: Colors.orange,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      Expanded(
-                        child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                          stream: chatRef
-                              .collection('messages')
-                              .orderBy('createdAt')
-                              .snapshots(),
-                          builder: (context, snap) {
-                            if (!snap.hasData) {
-                              return const Center(child: LeafSpinner(size: 28));
-                            }
+                          itemCount: docs.length,
+                          itemBuilder: (context, i) {
+                            final doc = docs[i];
+                            final data = doc.data();
+                            final senderId = (data['senderId'] ?? '').toString();
 
-                            final docs = snap.data!.docs;
-
-                            if (docs.isEmpty) {
-                              return const Center(
-                                child: Text('Сообщений пока нет'),
-                              );
-                            }
-
-                            WidgetsBinding.instance.addPostFrameCallback((_) {
-                              if (_scroll.hasClients) {
-                                _scroll.jumpTo(_scroll.position.maxScrollExtent);
-                              }
-                            });
-
-                            return ListView.builder(
-                              controller: _scroll,
-                              padding: const EdgeInsets.all(12),
-                              itemCount: docs.length,
-                              itemBuilder: (context, i) {
-                                final data = docs[i].data();
-                                final senderId = (data['senderId'] ?? '').toString();
-                                final senderName = (data['senderName'] ?? '').toString();
-                                final text = (data['text'] ?? '').toString();
-                                final isSystem = senderId == 'system';
-                                final isMine = senderId == me.uid;
-
-                                return Align(
-                                  alignment: isSystem
-                                      ? Alignment.center
-                                      : isMine
-                                          ? Alignment.centerRight
-                                          : Alignment.centerLeft,
-                                  child: Container(
-                                    margin: const EdgeInsets.only(bottom: 8),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 14,
-                                      vertical: 10,
-                                    ),
-                                    constraints: const BoxConstraints(maxWidth: 320),
-                                    decoration: BoxDecoration(
-                                      color: isSystem
-                                          ? const Color(0xFFE8EEF8)
-                                          : isMine
-                                              ? const Color(0xFFA8E932)
-                                              : const Color(0xFF1E2A4A),
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        if (!isMine && !isSystem && senderName.isNotEmpty)
-                                          Padding(
-                                            padding: const EdgeInsets.only(bottom: 4),
-                                            child: Text(
-                                              senderName,
-                                              style: const TextStyle(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w700,
-                                                color: Color(0xFFA5B4FC),
-                                              ),
-                                            ),
-                                          ),
-                                        Text(
-                                          text,
-                                          style: TextStyle(
-                                            color: isSystem
-                                                ? const Color(0xFF24324A)
-                                                : isMine
-                                                    ? Colors.black
-                                                    : Colors.white,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              },
+                            return _ChatMessageTile(
+                              messageId: doc.id,
+                              data: data,
+                              isMine: senderId == myId,
+                              isGroupChat: otherMemberIds.length > 1,
+                              otherMemberIds: otherMemberIds,
+                              onDelete: senderId == myId
+                                  ? () => _deleteMessageForAll(doc.id)
+                                  : null,
                             );
                           },
-                        ),
-                      ),
-                      SafeArea(
-                        top: false,
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: TextField(
-                                  controller: _msg,
-                                  enabled: !_sending &&
-                                      !_sendingLocation &&
-                                      (requestStatus == 'in_chat' || requestStatus == 'open'),
-                                  decoration: const InputDecoration(
-                                    hintText: 'Сообщение...',
-                                  ),
-                                  onSubmitted: (_) => _sendText(requestStatus: requestStatus),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              FilledButton(
-                                onPressed: (!_sending &&
-                                        !_sendingLocation &&
-                                        (requestStatus == 'in_chat' || requestStatus == 'open'))
-                                    ? () => _sendText(requestStatus: requestStatus)
-                                    : null,
-                                child: _sending
-                                    ? const LeafSpinner(size: 18, color: Colors.white)
-                                    : const Icon(Icons.send),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+                        );
+                      },
+                    ),
                   ),
-                );
-              },
+                  SafeArea(
+                    top: false,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                      child: Row(
+                        children: [
+                          IconButton(
+                            tooltip: 'Отправить геолокацию',
+                            onPressed: (_sending || _sendingLocation)
+                                ? null
+                                : () => _sendLocation(requestStatus: requestStatus),
+                            icon: _sendingLocation
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.location_on_outlined),
+                          ),
+                          Expanded(
+                            child: TextField(
+                              controller: _msg,
+                              enabled: !_sending &&
+                                  requestStatus != 'done' &&
+                                  requestStatus != 'cancelled' &&
+                                  requestStatus != 'expired',
+                              decoration: const InputDecoration(
+                                hintText: 'Сообщение...',
+                              ),
+                              onSubmitted: (_) => _sendText(requestStatus: requestStatus),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          FilledButton(
+                            onPressed: _sending
+                                ? null
+                                : () => _sendText(requestStatus: requestStatus),
+                            child: _sending
+                                ? const LeafSpinner(size: 18, color: Colors.white)
+                                : const Icon(Icons.send),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             );
           },
         );
@@ -12509,13 +12599,16 @@ class _ChatMessageTile extends StatelessWidget {
 
     if (lat == null || lng == null) return;
 
-    final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
+    final uri = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=$lat,$lng',
+    );
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   @override
   Widget build(BuildContext context) {
     final senderId = (data['senderId'] ?? '').toString();
+    final senderName = (data['senderName'] ?? '').toString();
     final text = (data['text'] ?? '').toString();
     final type = (data['type'] ?? 'text').toString();
     final deletedForAll = data['deletedForAll'] == true;
@@ -12580,14 +12673,14 @@ class _ChatMessageTile extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  Icons.location_on,
+                  Icons.location_on_outlined,
                   size: 18,
                   color: textColor,
                 ),
                 const SizedBox(width: 6),
                 Flexible(
                   child: Text(
-                    city.isEmpty ? 'Геолокация' : 'Геолокация: $city',
+                    city.isEmpty ? 'Геолокация' : city,
                     style: TextStyle(
                       color: textColor,
                       fontWeight: FontWeight.w700,
@@ -12596,20 +12689,12 @@ class _ChatMessageTile extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: isMine
-                    ? Colors.white.withOpacity(0.42)
-                    : Colors.white.withOpacity(0.10),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Text(
-                'Нажми, чтобы открыть на карте',
-                style: TextStyle(
-                  color: textColor,
-                ),
+            const SizedBox(height: 6),
+            Text(
+              'Нажми, чтобы открыть карту',
+              style: TextStyle(
+                color: textColor.withOpacity(0.78),
+                fontSize: 12,
               ),
             ),
           ],
@@ -12620,86 +12705,73 @@ class _ChatMessageTile extends StatelessWidget {
         text,
         style: TextStyle(
           color: textColor,
-          height: 1.45,
+          height: 1.35,
         ),
       );
     }
 
     return Align(
       alignment: align,
-      child: ConstrainedBox(
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
         constraints: const BoxConstraints(maxWidth: 320),
         child: Column(
-          crossAxisAlignment: senderId == 'system'
-              ? CrossAxisAlignment.center
-              : isMine
-                  ? CrossAxisAlignment.end
-                  : CrossAxisAlignment.start,
+          crossAxisAlignment:
+              isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: bubbleColor,
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  content,
-                  if (senderId != 'system') ...[
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _formatTime(ts),
-                          style: TextStyle(
-                            color: textColor.withOpacity(0.72),
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        if (isMine && !deletedForAll) ...[
-                          const SizedBox(width: 8),
-                          Text(
-                            readText,
-                            style: TextStyle(
-                              color: textColor.withOpacity(0.72),
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ] else ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      _formatTime(ts),
-                      style: const TextStyle(
-                        color: Color(0xFF5F6B7A),
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ]
-                ],
-              ),
-            ),
-            if (onDelete != null) ...[
-              const SizedBox(height: 4),
-              GestureDetector(
-                onTap: onDelete,
+            if (!isMine && senderId != 'system' && senderName.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(left: 6, bottom: 4),
                 child: Text(
-                  'Удалить',
-                  style: TextStyle(
-                    color: Colors.red.shade400,
+                  senderName,
+                  style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
+                    color: Color(0xFF6B7280),
                   ),
                 ),
               ),
-            ],
+            Material(
+              color: bubbleColor,
+              borderRadius: BorderRadius.circular(18),
+              child: InkWell(
+                onLongPress: isMine && onDelete != null ? onDelete : null,
+                borderRadius: BorderRadius.circular(18),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  child: content,
+                ),
+              ),
+            ),
+            if (senderId != 'system')
+              Padding(
+                padding: const EdgeInsets.only(top: 4, left: 6, right: 6),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _formatTime(ts),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF94A3B8),
+                      ),
+                    ),
+                    if (isMine) ...[
+                      const SizedBox(width: 8),
+                      Text(
+                        readText,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF94A3B8),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
           ],
         ),
       ),
@@ -12707,6 +12779,156 @@ class _ChatMessageTile extends StatelessWidget {
   }
 }
 
+Future<void> requestCompletionForRequest({
+  required BuildContext context,
+  required String requestId,
+  required String helperId,
+}) async {
+  final me = FirebaseAuth.instance.currentUser;
+  if (me == null) return;
+
+  final db = FirebaseFirestore.instance;
+  final requestRef = db.collection('requests').doc(requestId);
+
+  try {
+    final snap = await requestRef.get();
+    final data = snap.data();
+    if (data == null) throw Exception('Заявка не найдена');
+
+    final authorId = (data['authorId'] ?? '').toString();
+    if (authorId != me.uid) {
+      throw Exception('Только автор заявки может запросить завершение');
+    }
+
+    await requestRef.set({
+      'status': 'completion_pending',
+      'completionRequestedAt': FieldValue.serverTimestamp(),
+      'completionRequestedBy': me.uid,
+      'completionHelperId': helperId,
+      'authorCompletionPhotoUrl': '',
+      'helperCompletionPhotoUrl': '',
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    await db.collection('users').doc(helperId).collection('notifications').add({
+      'type': 'request_completion_photo_needed',
+      'requestId': requestId,
+      'text': 'Заказчик запросил завершение заявки. Прикрепи фото результата.',
+      'seen': false,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    AppNotice.show(
+      context,
+      message: 'Запрошено подтверждение завершения. Теперь оба должны прикрепить фото.',
+      type: AppNoticeType.success,
+    );
+  } catch (e) {
+    AppNotice.show(
+      context,
+      message: 'Ошибка: $e',
+      type: AppNoticeType.error,
+    );
+  }
+}
+
+
+
+Future<void> uploadCompletionPhoto({
+  required BuildContext context,
+  required String requestId,
+}) async {
+  final me = FirebaseAuth.instance.currentUser;
+  if (me == null) return;
+
+  final db = FirebaseFirestore.instance;
+  final requestRef = db.collection('requests').doc(requestId);
+
+  try {
+    final snap = await requestRef.get();
+    final data = snap.data();
+    if (data == null) throw Exception('Заявка не найдена');
+
+    final authorId = (data['authorId'] ?? '').toString();
+    final helperId = (data['completionHelperId'] ?? '').toString();
+
+    if (authorId != me.uid && helperId != me.uid) {
+      throw Exception('Ты не участник этой заявки');
+    }
+
+    final imageService = CloudinaryImageService();
+    final url = await imageService.pickAndUploadImage(
+      folder: 'volunteer_match/completion_photos',
+      imageQuality: 75,
+    );
+
+    if (url == null || url.isEmpty) return;
+
+    final isAuthor = authorId == me.uid;
+
+    await requestRef.set({
+      if (isAuthor) 'authorCompletionPhotoUrl': url,
+      if (!isAuthor) 'helperCompletionPhotoUrl': url,
+      if (isAuthor) 'authorCompletionPhotoAt': FieldValue.serverTimestamp(),
+      if (!isAuthor) 'helperCompletionPhotoAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    final fresh = await requestRef.get();
+    final freshData = fresh.data() ?? {};
+    final authorPhoto = (freshData['authorCompletionPhotoUrl'] ?? '').toString();
+    final helperPhoto = (freshData['helperCompletionPhotoUrl'] ?? '').toString();
+
+    if (authorPhoto.isNotEmpty && helperPhoto.isNotEmpty) {
+      await requestRef.set({
+        'completionPhotosReady': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
+
+    AppNotice.show(
+      context,
+      message: 'Фото прикреплено',
+      type: AppNoticeType.success,
+    );
+  } catch (e) {
+    AppNotice.show(
+      context,
+      message: 'Ошибка загрузки фото: $e',
+      type: AppNoticeType.error,
+    );
+  }
+}
+
+Future<void> finalizeRequestAfterBothPhotos({
+  required BuildContext context,
+  required String requestId,
+  required String helperId,
+}) async {
+  final requestSnap = await FirebaseFirestore.instance
+      .collection('requests')
+      .doc(requestId)
+      .get();
+
+  final requestData = requestSnap.data() ?? {};
+  final authorPhoto = (requestData['authorCompletionPhotoUrl'] ?? '').toString();
+  final helperPhoto = (requestData['helperCompletionPhotoUrl'] ?? '').toString();
+
+  if (authorPhoto.isEmpty || helperPhoto.isEmpty) {
+    AppNotice.show(
+      context,
+      message: 'Нужно, чтобы и заказчик, и волонтёр прикрепили фото завершения',
+      type: AppNoticeType.info,
+    );
+    return;
+  }
+
+  await closeRequestAndRateHelper(
+    context: context,
+    requestId: requestId,
+    helperId: helperId,
+  );
+}
 
 
 class ReportDialog extends StatefulWidget {
