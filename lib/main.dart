@@ -28,9 +28,9 @@ import 'package:intl/intl.dart';
 
 
 const String kSupportEmail = 'volunteermatch1@gmail.com';
-const String kSupportWhatsAppPhone = '77016629276'; // без +, пробелов и скобок
+const String kSupportWhatsAppPhone = '77716629276'; // без +, пробелов и скобок
 const String kSupportWhatsAppText =
-    'Здравствуйте! У меня вопрос по приложению Volunteer Match.';
+    'Здравствуйте! У меня вопрос/ошибка  по приложению Volunteer Match.';
 
 
 class _SupportActionTile extends StatelessWidget {
@@ -2410,7 +2410,7 @@ class CloudinaryImageService {
 
   Future<String?> pickAndUploadImage({
     required String folder,
-    int imageQuality = 85,
+    int imageQuality = 65,
   }) async {
     final XFile? file = await _picker.pickImage(
       source: ImageSource.gallery,
@@ -2483,10 +2483,58 @@ const achievementDefinitions = [
     points: 10,
   ),
   AchievementDefinition(
+    id: 'three_requests_created',
+    title: 'Уже не новичок',
+    description: 'Создайте 3 заявки',
+    points: 15,
+  ),
+  AchievementDefinition(
+    id: 'five_requests_created',
+    title: 'Активный автор',
+    description: 'Создайте 5 заявок',
+    points: 20,
+  ),
+  AchievementDefinition(
+    id: 'ten_requests_created',
+    title: 'Голос помощи',
+    description: 'Создайте 10 заявок',
+    points: 30,
+  ),
+  AchievementDefinition(
+    id: 'twenty_requests_created',
+    title: 'Организатор добра',
+    description: 'Создайте 20 заявок',
+    points: 50,
+  ),
+  AchievementDefinition(
     id: 'first_chat_message',
     title: 'Первый контакт',
     description: 'Отправьте первое сообщение в чате',
     points: 5,
+  ),
+  AchievementDefinition(
+    id: 'ten_chat_messages',
+    title: 'На связи',
+    description: 'Отправьте 10 сообщений в чатах',
+    points: 10,
+  ),
+  AchievementDefinition(
+    id: 'fifty_chat_messages',
+    title: 'Разговорился',
+    description: 'Отправьте 50 сообщений в чатах',
+    points: 20,
+  ),
+  AchievementDefinition(
+    id: 'hundred_chat_messages',
+    title: 'Голос сообщества',
+    description: 'Отправьте 100 сообщений в чатах',
+    points: 35,
+  ),
+  AchievementDefinition(
+    id: 'two_hundred_chat_messages',
+    title: 'Коммуникатор',
+    description: 'Отправьте 200 сообщений в чатах',
+    points: 50,
   ),
   AchievementDefinition(
     id: 'first_rating_received',
@@ -2495,10 +2543,40 @@ const achievementDefinitions = [
     points: 10,
   ),
   AchievementDefinition(
+    id: 'five_ratings_received',
+    title: 'Замеченный',
+    description: 'Получите 5 оценок',
+    points: 20,
+  ),
+  AchievementDefinition(
+    id: 'ten_ratings_received',
+    title: 'Проверенный делом',
+    description: 'Получите 10 оценок',
+    points: 30,
+  ),
+  AchievementDefinition(
+    id: 'twenty_ratings_received',
+    title: 'Народный выбор',
+    description: 'Получите 20 оценок',
+    points: 45,
+  ),
+  AchievementDefinition(
     id: 'rating_4_5',
     title: 'Хорошая репутация',
     description: 'Достигните рейтинга 4.5 и выше',
     points: 20,
+  ),
+  AchievementDefinition(
+    id: 'rating_4_8',
+    title: 'Почти идеал',
+    description: 'Достигните рейтинга 4.8 и выше',
+    points: 30,
+  ),
+  AchievementDefinition(
+    id: 'rating_5_0',
+    title: 'Безупречный',
+    description: 'Достигните рейтинга 5.0',
+    points: 40,
   ),
   AchievementDefinition(
     id: 'first_volunteer_help',
@@ -2507,24 +2585,224 @@ const achievementDefinitions = [
     points: 15,
   ),
   AchievementDefinition(
+    id: 'three_volunteer_helps',
+    title: 'Рядом, когда нужно',
+    description: 'Помогите 3 раза',
+    points: 20,
+  ),
+  AchievementDefinition(
     id: 'five_volunteer_helps',
     title: 'Надёжный помощник',
     description: 'Помогите 5 раз',
     points: 35,
   ),
+  AchievementDefinition(
+    id: 'ten_volunteer_helps',
+    title: 'Человек дела',
+    description: 'Помогите 10 раз',
+    points: 50,
+  ),
+  AchievementDefinition(
+    id: 'fifteen_volunteer_helps',
+    title: 'Сильная опора',
+    description: 'Помогите 15 раз',
+    points: 65,
+  ),
+  AchievementDefinition(
+    id: 'twenty_volunteer_helps',
+    title: 'Легенда помощи',
+    description: 'Помогите 20 раз',
+    points: 80,
+  ),
+  AchievementDefinition(
+    id: 'thirty_volunteer_helps',
+    title: 'Сердце платформы',
+    description: 'Помогите 30 раз',
+    points: 100,
+  ),
+  AchievementDefinition(
+    id: 'first_request_completed_as_author',
+    title: 'Довёл до результата',
+    description: 'Закройте первую заявку с отзывом',
+    points: 15,
+  ),
+  AchievementDefinition(
+    id: 'five_requests_completed_as_author',
+    title: 'Умеет завершать',
+    description: 'Закройте 5 заявок с отзывом',
+    points: 35,
+  ),
+  AchievementDefinition(
+    id: 'ten_requests_completed_as_author',
+    title: 'Финализатор',
+    description: 'Закройте 10 заявок с отзывом',
+    points: 55,
+  ),
+  AchievementDefinition(
+    id: 'first_event_join',
+    title: 'Первый ивент',
+    description: 'Зарегистрируйтесь на первое мероприятие',
+    points: 10,
+  ),
+  AchievementDefinition(
+    id: 'three_events_joined',
+    title: 'В движении',
+    description: 'Зарегистрируйтесь на 3 ивента',
+    points: 20,
+  ),
+  AchievementDefinition(
+    id: 'five_events_joined',
+    title: 'Постоянный участник',
+    description: 'Зарегистрируйтесь на 5 ивентов',
+    points: 30,
+  ),
+  AchievementDefinition(
+    id: 'ten_events_joined',
+    title: 'Лицо сообщества',
+    description: 'Зарегистрируйтесь на 10 ивентов',
+    points: 50,
+  ),
+  AchievementDefinition(
+    id: 'first_event_created',
+    title: 'Первый организованный ивент',
+    description: 'Создайте свой первый ивент',
+    points: 20,
+  ),
+  AchievementDefinition(
+    id: 'three_events_created',
+    title: 'Организатор',
+    description: 'Создайте 3 ивента',
+    points: 35,
+  ),
+  AchievementDefinition(
+    id: 'five_events_created',
+    title: 'Продюсер добра',
+    description: 'Создайте 5 ивентов',
+    points: 50,
+  ),
+  AchievementDefinition(
+    id: 'news_author_first',
+    title: 'Первая новость',
+    description: 'Опубликуйте первую новость',
+    points: 15,
+  ),
+  AchievementDefinition(
+    id: 'news_author_five',
+    title: 'Голос платформы',
+    description: 'Опубликуйте 5 новостей',
+    points: 35,
+  ),
+  AchievementDefinition(
+    id: 'uploaded_avatar',
+    title: 'С лицом',
+    description: 'Загрузите аватар профиля',
+    points: 10,
+  ),
+  AchievementDefinition(
+    id: 'uploaded_profile_background',
+    title: 'Стиль профиля',
+    description: 'Загрузите фон профиля',
+    points: 10,
+  ),
+  AchievementDefinition(
+    id: 'filled_bio',
+    title: 'Открытая карточка',
+    description: 'Заполните описание “О себе”',
+    points: 10,
+  ),
+  AchievementDefinition(
+    id: 'selected_city',
+    title: 'Свой город',
+    description: 'Укажите город в профиле',
+    points: 5,
+  ),
+  AchievementDefinition(
+    id: 'first_support_report',
+    title: 'Обратная связь',
+    description: 'Отправьте первое сообщение в поддержку',
+    points: 10,
+  ),
+  AchievementDefinition(
+    id: 'night_helper',
+    title: 'Ночной волонтёр',
+    description: 'Отправьте сообщение в чат ночью',
+    points: 15,
+  ),
+  AchievementDefinition(
+    id: 'early_bird',
+    title: 'Ранний помощник',
+    description: 'Отправьте сообщение в чат утром',
+    points: 15,
+  ),
+  AchievementDefinition(
+    id: 'weekend_activity',
+    title: 'Выходной не зря',
+    description: 'Будьте активны в выходной день',
+    points: 10,
+  ),
+  AchievementDefinition(
+    id: 'urgent_helper',
+    title: 'На срочный вызов',
+    description: 'Откликнитесь на срочную заявку',
+    points: 15,
+  ),
+  AchievementDefinition(
+    id: 'multi_category_helper',
+    title: 'Разносторонний',
+    description: 'Помогайте минимум в 3 разных категориях',
+    points: 25,
+  ),
+  AchievementDefinition(
+    id: 'consistent_helper',
+    title: 'Стабильный',
+    description: 'Сохраняйте высокий рейтинг и активность',
+    points: 40,
+  ),
+  AchievementDefinition(
+    id: 'first_login',
+    title: 'Добро пожаловать',
+    description: 'Впервые войдите в приложение',
+    points: 5,
+  ),
+  AchievementDefinition(
+    id: 'one_month_member',
+    title: 'С нами месяц',
+    description: 'Будьте участником платформы 30 дней',
+    points: 20,
+  ),
+  AchievementDefinition(
+    id: 'three_month_member',
+    title: 'Постоянный участник',
+    description: 'Будьте участником платформы 90 дней',
+    points: 40,
+  ),
+  AchievementDefinition(
+    id: 'hundred_points_total',
+    title: '100 очков добра',
+    description: 'Наберите 100 очков достижений',
+    points: 25,
+  ),
+  AchievementDefinition(
+    id: 'three_hundred_points_total',
+    title: '300 очков добра',
+    description: 'Наберите 300 очков достижений',
+    points: 50,
+  ),
+  AchievementDefinition(
+    id: 'five_hundred_points_total',
+    title: '500 очков добра',
+    description: 'Наберите 500 очков достижений',
+    points: 80,
+  ),
 ];
 
 Map<String, dynamic> buildInitialAchievements() {
   return {
-    'verified_email': {'unlocked': false},
-    'first_request_created': {'unlocked': false},
-    'first_chat_message': {'unlocked': false},
-    'first_rating_received': {'unlocked': false},
-    'rating_4_5': {'unlocked': false},
-    'first_volunteer_help': {'unlocked': false},
-    'five_volunteer_helps': {'unlocked': false},
+    for (final def in achievementDefinitions)
+      def.id: {'unlocked': false}
   };
 }
+
 
 
 class SplashScreen extends StatefulWidget {
@@ -2631,7 +2909,10 @@ class AchievementService {
     final snap = await userRef.get();
     final data = snap.data() ?? {};
 
-    final achievements = Map<String, dynamic>.from(data['achievements'] ?? {});
+    final achievements = Map<String, dynamic>.from(
+      data['achievements'] ?? buildInitialAchievements(),
+    );
+
     final current = Map<String, dynamic>.from(
       achievements[achievementId] ?? {'unlocked': false},
     );
@@ -2674,9 +2955,46 @@ class AchievementService {
   }
 
   Future<String?> checkAfterRequestCreated() async {
-    final unlocked = await unlockAchievement('first_request_created');
-    if (unlocked) return 'Открыто достижение: Первая заявка';
-    return null;
+    final user = _auth.currentUser;
+    if (user == null) return null;
+
+    final ref = _db.collection('users').doc(user.uid);
+    final snap = await ref.get();
+    final data = snap.data() ?? {};
+    final count = (data['createdRequestsCount'] is num)
+        ? (data['createdRequestsCount'] as num).toInt()
+        : 0;
+
+    final opened = <String>[];
+
+    if (count >= 1) {
+      if (await unlockAchievement('first_request_created')) {
+        opened.add('Первая заявка');
+      }
+    }
+    if (count >= 3) {
+      if (await unlockAchievement('three_requests_created')) {
+        opened.add('Уже не новичок');
+      }
+    }
+    if (count >= 5) {
+      if (await unlockAchievement('five_requests_created')) {
+        opened.add('Активный автор');
+      }
+    }
+    if (count >= 10) {
+      if (await unlockAchievement('ten_requests_created')) {
+        opened.add('Голос помощи');
+      }
+    }
+    if (count >= 20) {
+      if (await unlockAchievement('twenty_requests_created')) {
+        opened.add('Организатор добра');
+      }
+    }
+
+    if (opened.isEmpty) return null;
+    return 'Открыто: ${opened.join(', ')}';
   }
 
   Future<String?> checkAfterFirstChatMessage() async {
@@ -2690,11 +3008,36 @@ class AchievementService {
         ? (data['chatMessagesCount'] as num).toInt()
         : 0;
 
+    final opened = <String>[];
+
     if (count >= 1) {
-      final unlocked = await unlockAchievement('first_chat_message');
-      if (unlocked) return 'Открыто достижение: Первый контакт';
+      if (await unlockAchievement('first_chat_message')) {
+        opened.add('Первый контакт');
+      }
     }
-    return null;
+    if (count >= 10) {
+      if (await unlockAchievement('ten_chat_messages')) {
+        opened.add('На связи');
+      }
+    }
+    if (count >= 50) {
+      if (await unlockAchievement('fifty_chat_messages')) {
+        opened.add('Разговорился');
+      }
+    }
+    if (count >= 100) {
+      if (await unlockAchievement('hundred_chat_messages')) {
+        opened.add('Голос сообщества');
+      }
+    }
+    if (count >= 200) {
+      if (await unlockAchievement('two_hundred_chat_messages')) {
+        opened.add('Коммуникатор');
+      }
+    }
+
+    if (opened.isEmpty) return null;
+    return 'Открыто: ${opened.join(', ')}';
   }
 
   Future<List<String>> checkAfterReceivedRatingForUser({
@@ -2704,20 +3047,60 @@ class AchievementService {
   }) async {
     final result = <String>[];
 
-    if (ratingCount >= 1) {
-      final first = await unlockAchievementForUser(
-        userId: userId,
-        achievementId: 'first_rating_received',
-      );
-      if (first) result.add('Открыто достижение: Первая оценка');
+    if (ratingCount >= 1 &&
+        await unlockAchievementForUser(
+          userId: userId,
+          achievementId: 'first_rating_received',
+        )) {
+      result.add('Открыто достижение: Первая оценка');
     }
 
-    if (ratingCount >= 1 && rating >= 4.5) {
-      final rep = await unlockAchievementForUser(
-        userId: userId,
-        achievementId: 'rating_4_5',
-      );
-      if (rep) result.add('Открыто достижение: Хорошая репутация');
+    if (ratingCount >= 5 &&
+        await unlockAchievementForUser(
+          userId: userId,
+          achievementId: 'five_ratings_received',
+        )) {
+      result.add('Открыто достижение: Замеченный');
+    }
+
+    if (ratingCount >= 10 &&
+        await unlockAchievementForUser(
+          userId: userId,
+          achievementId: 'ten_ratings_received',
+        )) {
+      result.add('Открыто достижение: Проверенный делом');
+    }
+
+    if (ratingCount >= 20 &&
+        await unlockAchievementForUser(
+          userId: userId,
+          achievementId: 'twenty_ratings_received',
+        )) {
+      result.add('Открыто достижение: Народный выбор');
+    }
+
+    if (rating >= 4.5 &&
+        await unlockAchievementForUser(
+          userId: userId,
+          achievementId: 'rating_4_5',
+        )) {
+      result.add('Открыто достижение: Хорошая репутация');
+    }
+
+    if (rating >= 4.8 &&
+        await unlockAchievementForUser(
+          userId: userId,
+          achievementId: 'rating_4_8',
+        )) {
+      result.add('Открыто достижение: Почти идеал');
+    }
+
+    if (rating >= 5.0 &&
+        await unlockAchievementForUser(
+          userId: userId,
+          achievementId: 'rating_5_0',
+        )) {
+      result.add('Открыто достижение: Безупречный');
     }
 
     return result;
@@ -2729,20 +3112,62 @@ class AchievementService {
   }) async {
     final result = <String>[];
 
-    if (helpsCount >= 1) {
-      final first = await unlockAchievementForUser(
-        userId: userId,
-        achievementId: 'first_volunteer_help',
-      );
-      if (first) result.add('Открыто достижение: Первый добрый поступок');
+    final checks = <MapEntry<int, MapEntry<String, String>>>[
+      const MapEntry(1, MapEntry('first_volunteer_help', 'Первый добрый поступок')),
+      const MapEntry(3, MapEntry('three_volunteer_helps', 'Рядом, когда нужно')),
+      const MapEntry(5, MapEntry('five_volunteer_helps', 'Надёжный помощник')),
+      const MapEntry(10, MapEntry('ten_volunteer_helps', 'Человек дела')),
+      const MapEntry(15, MapEntry('fifteen_volunteer_helps', 'Сильная опора')),
+      const MapEntry(20, MapEntry('twenty_volunteer_helps', 'Легенда помощи')),
+      const MapEntry(30, MapEntry('thirty_volunteer_helps', 'Сердце платформы')),
+    ];
+
+    for (final item in checks) {
+      if (helpsCount >= item.key) {
+        final unlocked = await unlockAchievementForUser(
+          userId: userId,
+          achievementId: item.value.key,
+        );
+        if (unlocked) {
+          result.add('Открыто достижение: ${item.value.value}');
+        }
+      }
     }
 
-    if (helpsCount >= 5) {
-      final five = await unlockAchievementForUser(
-        userId: userId,
-        achievementId: 'five_volunteer_helps',
-      );
-      if (five) result.add('Открыто достижение: Надёжный помощник');
+    return result;
+  }
+
+  Future<List<String>> checkProfileAchievementsForCurrentUser() async {
+    final user = _auth.currentUser;
+    if (user == null) return [];
+
+    final snap = await _db.collection('users').doc(user.uid).get();
+    final data = snap.data() ?? {};
+    final result = <String>[];
+
+    final avatarUrl = (data['avatarUrl'] ?? '').toString();
+    final profileBackground = (data['profileBackground'] ?? '').toString();
+    final bio = (data['bio'] ?? '').toString().trim();
+    final city = (data['city'] ?? '').toString().trim();
+
+    if (avatarUrl.isNotEmpty &&
+        await unlockAchievement('uploaded_avatar')) {
+      result.add('Открыто достижение: С лицом');
+    }
+
+    if (profileBackground.isNotEmpty &&
+        await unlockAchievement('uploaded_profile_background')) {
+      result.add('Открыто достижение: Стиль профиля');
+    }
+
+    if (bio.isNotEmpty &&
+        await unlockAchievement('filled_bio')) {
+      result.add('Открыто достижение: Открытая карточка');
+    }
+
+    if (city.isNotEmpty &&
+        await unlockAchievement('selected_city')) {
+      result.add('Открыто достижение: Свой город');
     }
 
     return result;
@@ -3945,6 +4370,50 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 const Divider(height: 1),
                 ListTile(
+                  leading: const Icon(Icons.alternate_email_outlined),
+                  title: Text(
+                    'Сменить email',
+                    style: TextStyle(
+                      color: text,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'Изменить адрес входа',
+                    style: TextStyle(color: sub),
+                  ),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const ChangeEmailScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.lock_reset_outlined),
+                  title: Text(
+                    'Сменить пароль',
+                    style: TextStyle(
+                      color: text,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'Обновить пароль аккаунта',
+                    style: TextStyle(color: sub),
+                  ),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const ChangePasswordScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const Divider(height: 1),
+                ListTile(
                   leading: const Icon(Icons.support_agent_outlined),
                   title: Text(
                     'Поддержка',
@@ -4015,7 +4484,7 @@ class SettingsScreen extends StatelessWidget {
 
 
 
-class FallingLeavesBackground extends StatefulWidget {
+class FallingLeavesBackground extends StatelessWidget {
   final bool dense;
 
   const FallingLeavesBackground({
@@ -4024,104 +4493,59 @@ class FallingLeavesBackground extends StatefulWidget {
   });
 
   @override
-  State<FallingLeavesBackground> createState() => _FallingLeavesBackgroundState();
-}
-
-class _FallingLeavesBackgroundState extends State<FallingLeavesBackground>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  final _random = math.Random(7);
-
-  late final List<_LeafSpec> _leaves;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 14),
-    )..repeat();
-
-    final count = widget.dense ? 22 : 14;
-    _leaves = List.generate(count, (_) {
-      return _LeafSpec(
-        startX: _random.nextDouble(),
-        size: 16 + _random.nextDouble() * 28,
-        durationFactor: 0.7 + _random.nextDouble() * 0.9,
-        delay: _random.nextDouble(),
-        drift: (_random.nextDouble() - 0.5) * 0.18,
-        rotationSpeed: (_random.nextDouble() - 0.5) * 2.2,
-        opacity: 0.18 + _random.nextDouble() * 0.32,
-      );
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  double _progress(double t, double delay, double durationFactor) {
-    final shifted = (t * durationFactor + delay) % 1.0;
-    return shifted;
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) {
-        final t = _controller.value;
-
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            final w = constraints.maxWidth;
-            final h = constraints.maxHeight;
-
-            return Stack(
-              children: [
-                Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Color(0xFFF7FAEF),
-                        Color(0xFFEDF6D9),
-                        Color(0xFFF9FBF4),
-                      ],
-                    ),
-                  ),
-                ),
-                for (final leaf in _leaves)
-                  () {
-                    final p = _progress(t, leaf.delay, leaf.durationFactor);
-                    final x = (leaf.startX + math.sin(p * math.pi * 2) * leaf.drift) * w;
-                    final y = (p * 1.25 - 0.15) * h;
-                    final angle = p * math.pi * 2 * leaf.rotationSpeed;
-
-                    return Positioned(
-                      left: x.clamp(-40.0, w + 40.0),
-                      top: y,
-                      child: Opacity(
-                        opacity: leaf.opacity,
-                        child: Transform.rotate(
-                          angle: angle,
-                          child: Icon(
-                            Icons.eco_outlined,
-                            size: leaf.size,
-                            color: const Color(0xFF7FAF44),
-                          ),
-                        ),
-                      ),
-                    );
-                  }(),
+    return Stack(
+      children: [
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFFF7FAEF),
+                Color(0xFFEDF6D9),
+                Color(0xFFF9FBF4),
               ],
-            );
-          },
-        );
-      },
+            ),
+          ),
+        ),
+        Positioned(
+          top: 60,
+          left: 20,
+          child: Icon(
+            Icons.eco_outlined,
+            size: dense ? 34 : 26,
+            color: const Color(0x337FAF44),
+          ),
+        ),
+        Positioned(
+          top: 140,
+          right: 28,
+          child: Icon(
+            Icons.eco_outlined,
+            size: dense ? 38 : 28,
+            color: const Color(0x2F7FAF44),
+          ),
+        ),
+        Positioned(
+          bottom: 120,
+          left: 36,
+          child: Icon(
+            Icons.eco_outlined,
+            size: dense ? 30 : 22,
+            color: const Color(0x2B7FAF44),
+          ),
+        ),
+        Positioned(
+          bottom: 50,
+          right: 20,
+          child: Icon(
+            Icons.eco_outlined,
+            size: dense ? 42 : 30,
+            color: const Color(0x2A7FAF44),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -4251,13 +4675,11 @@ class AuthGate extends StatelessWidget {
 
 class _IntroTopBar extends StatelessWidget {
   final VoidCallback onOpenWebsite;
-  final VoidCallback onDownloadApk;
   final VoidCallback onLogin;
   final VoidCallback onRegister;
 
   const _IntroTopBar({
     required this.onOpenWebsite,
-    required this.onDownloadApk,
     required this.onLogin,
     required this.onRegister,
   });
@@ -4267,14 +4689,18 @@ class _IntroTopBar extends StatelessWidget {
     final isMobile = MediaQuery.of(context).size.width < 760;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      padding: EdgeInsets.symmetric(
+        horizontal: isMobile ? 14 : 18,
+        vertical: 14,
+      ),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.88),
-        borderRadius: BorderRadius.circular(22),
+        color: Colors.white.withOpacity(0.80),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFE4EDC6)),
         boxShadow: const [
           BoxShadow(
             color: Color(0x12000000),
-            blurRadius: 22,
+            blurRadius: 18,
             offset: Offset(0, 8),
           ),
         ],
@@ -4312,7 +4738,6 @@ class _IntroTopBar extends StatelessWidget {
                             'Помощь рядом, когда она нужна',
                             style: TextStyle(
                               color: Color(0xFF667085),
-                              fontSize: 13,
                             ),
                           ),
                         ],
@@ -4322,8 +4747,8 @@ class _IntroTopBar extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                  spacing: 10,
+                  runSpacing: 10,
                   children: [
                     TextButton(
                       onPressed: onOpenWebsite,
@@ -4340,14 +4765,6 @@ class _IntroTopBar extends StatelessWidget {
                         foregroundColor: Colors.white,
                       ),
                       child: const Text('Регистрация'),
-                    ),
-                    FilledButton(
-                      onPressed: onDownloadApk,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFFA8E932),
-                        foregroundColor: Colors.black,
-                      ),
-                      child: const Text('APK'),
                     ),
                   ],
                 ),
@@ -4405,15 +4822,6 @@ class _IntroTopBar extends StatelessWidget {
                   ),
                   child: const Text('Регистрация'),
                 ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: onDownloadApk,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFFA8E932),
-                    foregroundColor: Colors.black,
-                  ),
-                  child: const Text('APK'),
-                ),
               ],
             ),
     );
@@ -4435,11 +4843,6 @@ class IntroScreen extends StatelessWidget {
   });
 
   Future<void> _openLanding() async {
-    final uri = Uri.parse('https://volunteermatch1.netlify.app/');
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
-  }
-
-  Future<void> _downloadApk() async {
     final uri = Uri.parse('https://volunteermatch1.netlify.app/');
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
@@ -4466,7 +4869,6 @@ class IntroScreen extends StatelessWidget {
                     children: [
                       _IntroTopBar(
                         onOpenWebsite: _openLanding,
-                        onDownloadApk: _downloadApk,
                         onLogin: onLogin,
                         onRegister: onRegister,
                       ),
@@ -4478,7 +4880,6 @@ class IntroScreen extends StatelessWidget {
                                 Expanded(
                                   child: _IntroHero(
                                     onOpenApp: onOpenApp,
-                                    onDownloadApk: _downloadApk,
                                   ),
                                 ),
                                 const SizedBox(width: 28),
@@ -4491,7 +4892,6 @@ class IntroScreen extends StatelessWidget {
                               children: [
                                 _IntroHero(
                                   onOpenApp: onOpenApp,
-                                  onDownloadApk: _downloadApk,
                                 ),
                                 const SizedBox(height: 24),
                                 const _PhonePreviewCard(),
@@ -4507,49 +4907,22 @@ class IntroScreen extends StatelessWidget {
                           _FeatureCard(
                             icon: Icons.place_outlined,
                             title: 'Рядом',
-                            text: 'Помощь и волонтёры поблизости.',
+                            text: 'Находите помощь и волонтёров поблизости.',
                           ),
                           _FeatureCard(
-                            icon: Icons.shield_outlined,
-                            title: 'Безопасно',
-                            text: 'Профиль, рейтинг и прозрачная активность.',
+                            icon: Icons.chat_bubble_outline,
+                            title: 'Чат',
+                            text: 'Общайтесь напрямую после отклика.',
                           ),
                           _FeatureCard(
-                            icon: Icons.flash_on_outlined,
-                            title: 'Быстро',
-                            text: 'Быстрые отклики и удобный чат.',
-                          ),
-                          _FeatureCard(
-                            icon: Icons.workspace_premium_outlined,
-                            title: 'Полезно',
-                            text: 'Достижения, активность и история помощи.',
+                            icon: Icons.event_outlined,
+                            title: 'Ивенты',
+                            text: 'Участвуйте в событиях и волонтёрских программах.',
                           ),
                         ],
                       ),
-                      const SizedBox(height: 28),
-                      const _SectionTitle('Как это работает'),
-                      const SizedBox(height: 16),
-                      const _StepTile(
-                        index: '1',
-                        title: 'Создай заявку',
-                        text: 'Опиши, какая помощь нужна и где ты находишься.',
-                      ),
-                      const _StepTile(
-                        index: '2',
-                        title: 'Получи отклик',
-                        text: 'Волонтёр рядом увидит заявку и откликнется.',
-                      ),
-                      const _StepTile(
-                        index: '3',
-                        title: 'Общайся в чате',
-                        text: 'Договоритесь о деталях прямо внутри приложения.',
-                      ),
-                      const _StepTile(
-                        index: '4',
-                        title: 'Заверши и оцени',
-                        text: 'После помощи можно поставить оценку и получить достижения.',
-                      ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 24),
+                      const _IntroContactCard(),
                     ],
                   ),
                 ),
@@ -4557,6 +4930,245 @@ class IntroScreen extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+
+class _IntroContactCard extends StatelessWidget {
+  const _IntroContactCard();
+
+  Future<void> _openEmail(BuildContext context) async {
+    final uri = Uri.parse(
+      'mailto:volunteermatch1@gmail.com?subject=${Uri.encodeComponent('Volunteer Match')}',
+    );
+
+    final ok = await launchUrl(uri);
+    if (!ok && context.mounted) {
+      AppNotice.show(
+        context,
+        message: 'Не удалось открыть почту',
+        type: AppNoticeType.error,
+      );
+    }
+  }
+
+  Future<void> _openWhatsApp(BuildContext context) async {
+    const phone = '77716629276'; // замени на свой номер business аккаунта
+    final text = Uri.encodeComponent(
+      'Здравствуйте! У меня вопрос по Volunteer Match.',
+    );
+
+    final uri = Uri.parse('https://wa.me/$phone?text=$text');
+
+    final ok = await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+    );
+
+    if (!ok && context.mounted) {
+      AppNotice.show(
+        context,
+        message: 'Не удалось открыть WhatsApp',
+        type: AppNoticeType.error,
+      );
+    }
+  }
+
+  void _openPrivacy(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const PrivacyPolicyScreen(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 760;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.90),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFE4EDC6)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x12000000),
+            blurRadius: 18,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFA8E932).withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.support_agent_outlined,
+                  color: Color(0xFF466E2D),
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Связаться с нами',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF101B36),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              _FooterActionChip(
+                icon: Icons.mail_outline,
+                label: 'volunteermatch1@gmail.com',
+                onTap: () => _openEmail(context),
+              ),
+              _FooterActionChip(
+                icon: Icons.chat_outlined,
+                label: 'WhatsApp',
+                onTap: () => _openWhatsApp(context),
+              ),
+              _FooterActionChip(
+                icon: Icons.privacy_tip_outlined,
+                label: 'Privacy Policy',
+                onTap: () => _openPrivacy(context),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Container(
+            width: double.infinity,
+            height: 1,
+            color: const Color(0xFFE8EED8),
+          ),
+          const SizedBox(height: 14),
+          isMobile
+              ? const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Volunteer Match',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF101B36),
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Платформа для волонтёрской помощи и полезных инициатив',
+                      style: TextStyle(
+                        color: Color(0xFF667085),
+                        height: 1.4,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      '© Volunteer Match',
+                      style: TextStyle(
+                        color: Color(0xFF98A2B3),
+                      ),
+                    ),
+                  ],
+                )
+              : const Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Volunteer Match',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF101B36),
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            'Платформа для волонтёрской помощи и полезных инициатив',
+                            style: TextStyle(
+                              color: Color(0xFF667085),
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      '© Volunteer Match',
+                      style: TextStyle(
+                        color: Color(0xFF98A2B3),
+                      ),
+                    ),
+                  ],
+                ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FooterActionChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _FooterActionChip({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF4F8EA),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: const Color(0xFFE4EDC6)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: const Color(0xFF466E2D),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF1B4332),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -4808,11 +5420,9 @@ class _AppNoticeOverlayState extends State<_AppNoticeOverlay>
 
 class _IntroHero extends StatelessWidget {
   final VoidCallback onOpenApp;
-  final VoidCallback onDownloadApk;
 
   const _IntroHero({
     required this.onOpenApp,
-    required this.onDownloadApk,
   });
 
   @override
@@ -4828,7 +5438,7 @@ class _IntroHero extends StatelessWidget {
             border: Border.all(color: const Color(0xFFD6E7A8)),
           ),
           child: const Text(
-            '✨ Мобильное приложение для волонтёрской помощи',
+            '✨ Платформа для волонтёрской помощи',
             style: TextStyle(
               color: Color(0xFF4C5565),
               fontWeight: FontWeight.w500,
@@ -4847,7 +5457,7 @@ class _IntroHero extends StatelessWidget {
         ),
         const SizedBox(height: 18),
         const Text(
-          'Создавайте заявки, находите волонтёров поблизости, общайтесь в чате и делайте добрые дела быстрее и удобнее.',
+          'Создавайте заявки, находите волонтёров поблизости, общайтесь в чате и участвуйте в полезных ивентах.',
           style: TextStyle(
             fontSize: 20,
             height: 1.5,
@@ -4859,24 +5469,6 @@ class _IntroHero extends StatelessWidget {
           spacing: 14,
           runSpacing: 14,
           children: [
-            FilledButton(
-              onPressed: onDownloadApk,
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFA8E932),
-                foregroundColor: Colors.black,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 26,
-                  vertical: 18,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                ),
-              ),
-              child: const Text(
-                'Скачать Android APK',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
-            ),
             OutlinedButton(
               onPressed: onOpenApp,
               style: OutlinedButton.styleFrom(
@@ -5635,7 +6227,6 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
     );
   }
 }
-
 
 
 
@@ -7140,195 +7731,129 @@ class _RequestDocCardState extends State<RequestDocCard> {
 
   @override
   Widget build(BuildContext context) {
-    final visual = getRequestVisualConfig(widget.category);
     final acceptedCount = widget.acceptedHelpers.length;
     final stillNeeds = acceptedCount < widget.helpersNeeded;
-    final isMobile = MediaQuery.of(context).size.width < 700;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(isMobile ? 20 : 24),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: visual.gradient,
+        color: isDark ? const Color(0xFF16201A) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: widget.urgent
+              ? Colors.red.withOpacity(0.35)
+              : (isDark
+                  ? Colors.white.withOpacity(0.07)
+                  : Colors.black.withOpacity(0.06)),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.16),
-            blurRadius: isMobile ? 14 : 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(isMobile ? 20 : 24),
-        child: Stack(
-          children: [
-            Positioned(
-              right: isMobile ? -12 : -18,
-              bottom: isMobile ? -12 : -18,
-              child: Icon(
-                visual.icon,
-                size: isMobile ? 72 : 132,
-                color: Colors.white.withOpacity(isMobile ? 0.07 : 0.09),
-              ),
-            ),
-            Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withOpacity(0.06),
-                      Colors.black.withOpacity(0.16),
-                      Colors.black.withOpacity(0.28),
-                    ],
-                  ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: UserMiniProfileButton(
+                  userId: widget.authorId,
+                  compact: true,
                 ),
               ),
-            ),
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                isMobile ? 10 : 16,
-                isMobile ? 10 : 16,
-                isMobile ? 10 : 16,
-                isMobile ? 6 : 16,
+              if (widget.urgent)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: const Text(
+                    'Срочно',
+                    style: TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              _GlassChip(
+                icon: Icons.category_outlined,
+                text: widget.category,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: UserMiniProfileButton(
-                          userId: widget.authorId,
-                          compact: true,
-                        ),
-                      ),
-                      if (widget.urgent) ...[
-                        const SizedBox(width: 6),
-                        const _UrgentGlassBadge(),
-                      ],
-                    ],
-                  ),
-                  SizedBox(height: isMobile ? 8 : 10),
-                  Wrap(
-                    spacing: isMobile ? 6 : 8,
-                    runSpacing: isMobile ? 6 : 8,
-                    children: [
-                      _GlassChip(
-                        icon: Icons.category_outlined,
-                        text: widget.category,
-                      ),
-                      _GlassChip(
-                        icon: Icons.location_on_outlined,
-                        text: widget.city,
-                      ),
-                      _GlassChip(
-                        icon: Icons.groups_2_outlined,
-                        text: stillNeeds
-                            ? 'Ещё: ${widget.helpersNeeded - acceptedCount}'
-                            : 'Набрано',
-                      ),
-                    ],
-                  ),
-                  if (widget.tags.isNotEmpty) ...[
-                    SizedBox(height: isMobile ? 8 : 10),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: widget.tags.take(isMobile ? 2 : 3).map((tag) {
-                        return _GlassChip(
-                          icon: Icons.tag,
-                          text: tag,
-                        );
-                      }).toList(),
-                    ),
-                  ],
-                  SizedBox(height: isMobile ? 10 : 14),
-                  Text(
-                    widget.title,
-                    style: TextStyle(
-                      fontSize: isMobile ? 18 : 28,
-                      fontWeight: FontWeight.w900,
-                      height: 1.02,
-                      color: Colors.white,
-                    ),
-                  ),
-                  SizedBox(height: isMobile ? 8 : 10),
-                  Text(
-                    widget.description,
-                    maxLines: isMobile ? 3 : 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      height: 1.35,
-                      color: Colors.white.withOpacity(0.93),
-                      fontSize: isMobile ? 13.5 : 15,
-                    ),
-                  ),
-                  SizedBox(height: isMobile ? 10 : 12),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.hourglass_bottom_rounded,
-                        size: isMobile ? 16 : 18,
-                        color: Colors.white.withOpacity(0.78),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        _formatRemaining(widget.expiresAt),
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.78),
-                          fontWeight: FontWeight.w700,
-                          fontSize: isMobile ? 12.5 : 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: isMobile ? 10 : 14),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: (_opening || !stillNeeds) ? null : _help,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF4E7F2F),
-                        foregroundColor: Colors.white,
-                        padding: EdgeInsets.symmetric(
-                          vertical: isMobile ? 12 : 16,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(
-                            isMobile ? 14 : 18,
-                          ),
-                        ),
-                      ),
-                      icon: _opening
-                          ? const LeafSpinner(size: 18, color: Colors.white)
-                          : Icon(
-                              Icons.favorite_border,
-                              size: isMobile ? 18 : 20,
-                            ),
-                      label: Text(
-                        _opening
-                            ? 'Открываю чат...'
-                            : stillNeeds
-                                ? 'Помочь'
-                                : 'Набрано',
-                        style: TextStyle(
-                          fontSize: isMobile ? 14 : 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+              _GlassChip(
+                icon: Icons.location_on_outlined,
+                text: widget.city,
+              ),
+              _GlassChip(
+                icon: Icons.groups_2_outlined,
+                text: stillNeeds
+                    ? 'Ещё: ${widget.helpersNeeded - acceptedCount}'
+                    : 'Набрано',
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            widget.title,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              height: 1.1,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            widget.description,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              height: 1.35,
+              color: isDark ? Colors.white70 : const Color(0xFF374151),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Icon(
+                Icons.hourglass_bottom_rounded,
+                size: 16,
+                color: isDark ? Colors.white60 : Colors.black54,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                _formatRemaining(widget.expiresAt),
+                style: TextStyle(
+                  color: isDark ? Colors.white60 : Colors.black54,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: (_opening || !stillNeeds) ? null : _help,
+              icon: _opening
+                  ? const LeafSpinner(size: 18, color: Colors.white)
+                  : const Icon(Icons.favorite_border, size: 18),
+              label: Text(
+                _opening
+                    ? 'Открываю чат...'
+                    : stillNeeds
+                        ? 'Помочь'
+                        : 'Набрано',
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -8546,6 +9071,7 @@ class AchievementsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser!.uid;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Достижения')),
@@ -8557,7 +9083,9 @@ class AchievementsPage extends StatelessWidget {
           }
 
           final data = snap.data!.data() ?? {};
-          final achievements = Map<String, dynamic>.from(data['achievements'] ?? {});
+          final achievements = Map<String, dynamic>.from(
+            data['achievements'] ?? buildInitialAchievements(),
+          );
 
           int unlockedCount = 0;
           int totalPoints = 0;
@@ -8576,43 +9104,155 @@ class AchievementsPage extends StatelessWidget {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Открыто: $unlockedCount из ${achievementDefinitions.length}',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                        ),
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF16201A) : Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x12000000),
+                      blurRadius: 16,
+                      offset: Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Открыто: $unlockedCount из ${achievementDefinitions.length}',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Очки достижений: $totalPoints',
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Очки достижений: $totalPoints',
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                    const SizedBox(height: 12),
+                    LinearProgressIndicator(
+                      value: achievementDefinitions.isEmpty
+                          ? 0
+                          : unlockedCount / achievementDefinitions.length,
+                      minHeight: 10,
+                      borderRadius: BorderRadius.circular(999),
+                      backgroundColor: isDark
+                          ? Colors.white.withOpacity(0.08)
+                          : Colors.black.withOpacity(0.06),
+                      valueColor: const AlwaysStoppedAnimation(Color(0xFFB7FF3C)),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               ...achievementDefinitions.map((def) {
                 final item = Map<String, dynamic>.from(
                   achievements[def.id] ?? {'unlocked': false},
                 );
                 final unlocked = item['unlocked'] == true;
 
-                return Card(
-                  child: ListTile(
-                    leading: Icon(
-                      unlocked ? Icons.emoji_events : Icons.lock,
+                final unlockedBg = const Color(0xFFB7FF3C);
+                final unlockedText = const Color(0xFF132400);
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: unlocked
+                        ? unlockedBg
+                        : (isDark ? const Color(0xFF16201A) : Colors.white),
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(
+                      color: unlocked
+                          ? const Color(0xFFCCFF66)
+                          : (isDark
+                              ? Colors.white.withOpacity(0.08)
+                              : Colors.black.withOpacity(0.06)),
                     ),
-                    title: Text(def.title),
-                    subtitle: Text(def.description),
-                    trailing: Text('${def.points}'),
+                    boxShadow: unlocked
+                        ? [
+                            BoxShadow(
+                              color: const Color(0xFFB7FF3C).withOpacity(0.40),
+                              blurRadius: 18,
+                              offset: const Offset(0, 8),
+                            ),
+                          ]
+                        : const [
+                            BoxShadow(
+                              color: Color(0x12000000),
+                              blurRadius: 14,
+                              offset: Offset(0, 7),
+                            ),
+                          ],
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    leading: Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: unlocked
+                            ? Colors.white.withOpacity(0.35)
+                            : (isDark
+                                ? Colors.white.withOpacity(0.08)
+                                : Colors.black.withOpacity(0.05)),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(
+                        unlocked ? Icons.emoji_events : Icons.lock_outline,
+                        color: unlocked
+                            ? unlockedText
+                            : (isDark ? Colors.white70 : Colors.black54),
+                      ),
+                    ),
+                    title: Text(
+                      def.title,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: unlocked
+                            ? unlockedText
+                            : (isDark ? Colors.white : const Color(0xFF111827)),
+                      ),
+                    ),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        def.description,
+                        style: TextStyle(
+                          color: unlocked
+                              ? unlockedText.withOpacity(0.85)
+                              : (isDark ? Colors.white70 : const Color(0xFF6B7280)),
+                        ),
+                      ),
+                    ),
+                    trailing: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: unlocked
+                            ? Colors.white.withOpacity(0.35)
+                            : (isDark
+                                ? Colors.white.withOpacity(0.08)
+                                : Colors.black.withOpacity(0.05)),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '${def.points}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          color: unlocked
+                              ? unlockedText
+                              : (isDark ? Colors.white : const Color(0xFF111827)),
+                        ),
+                      ),
+                    ),
                   ),
                 );
               }),
@@ -8968,7 +9608,7 @@ class ProfileImageService {
   Future<String?> pickAndUploadImage({
     required String uid,
     required String folder,
-    int imageQuality = 85,
+    int imageQuality = 65,
   }) async {
     final XFile? file = await _picker.pickImage(
       source: ImageSource.gallery,
@@ -9104,7 +9744,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final url = await _imageService.pickAndUploadImage(
         folder: 'volunteer_match/avatars',
-        imageQuality: 80,
+        imageQuality: 70,
       );
 
       if (url == null) return;
@@ -9120,17 +9760,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         message: 'Аватар обновлён',
         type: AppNoticeType.success,
       );
-    } catch (e) {
-      if (!mounted) return;
-      AppNotice.show(
-        context,
-        message: 'Ошибка загрузки аватара: $e',
-        type: AppNoticeType.error,
-      );
     } finally {
-      if (mounted) {
-        setState(() => _avatarUploading = false);
-      }
+      if (mounted) setState(() => _avatarUploading = false);
     }
   }
 
@@ -9143,7 +9774,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final url = await _imageService.pickAndUploadImage(
         folder: 'volunteer_match/backgrounds',
-        imageQuality: 85,
+        imageQuality: 70,
       );
 
       if (url == null) return;
@@ -9159,43 +9790,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         message: 'Фон профиля обновлён',
         type: AppNoticeType.success,
       );
-    } catch (e) {
-      if (!mounted) return;
-      AppNotice.show(
-        context,
-        message: 'Ошибка загрузки фона: $e',
-        type: AppNoticeType.error,
-      );
     } finally {
-      if (mounted) {
-        setState(() => _bgUploading = false);
-      }
+      if (mounted) setState(() => _bgUploading = false);
     }
-  }
-
-  Future<Color> _getAdaptiveBioColor(String imageUrl) async {
-    try {
-      final palette = await PaletteGenerator.fromImageProvider(
-        NetworkImage(imageUrl),
-        size: const Size(300, 300),
-        maximumColorCount: 16,
-      );
-
-      final color =
-          palette.dominantColor?.color ??
-          palette.vibrantColor?.color ??
-          palette.mutedColor?.color ??
-          const Color(0xFFE8F5E9);
-
-      return Color.lerp(Colors.white, color, 0.35) ?? const Color(0xFFF3F7EF);
-    } catch (_) {
-      return const Color(0xFFF3F7EF);
-    }
-  }
-
-  Color _getReadableTextColor(Color bg) {
-    final brightness = ThemeData.estimateBrightnessForColor(bg);
-    return brightness == Brightness.dark ? Colors.white : Colors.black87;
   }
 
   @override
@@ -9228,254 +9825,194 @@ class _ProfileScreenState extends State<ProfileScreen> {
               (data['volunteerHelpsCount'] ?? 0).toString();
 
           final hasBackground = profileBackground.isNotEmpty;
+          final isDark = Theme.of(context).brightness == Brightness.dark;
 
-          return FutureBuilder<Color>(
-            future: hasBackground
-                ? _getAdaptiveBioColor(profileBackground)
-                : Future.value(const Color(0xFFF5F7F2)),
-            builder: (context, colorSnap) {
-              final adaptiveBioColor =
-                  colorSnap.data ?? const Color(0xFFF5F7F2);
-              final bioTextColor = _getReadableTextColor(adaptiveBioColor);
-
-              return ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  Container(
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: const Color(0xFF1B5E20),
+                    width: 1.2,
+                  ),
+                  color: hasBackground
+                      ? null
+                      : (isDark ? const Color(0xFF16201A) : const Color(0xFFF4F7EF)),
+                  image: hasBackground
+                      ? DecorationImage(
+                          image: NetworkImage(profileBackground),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(22),
+                  child: Container(
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: const Color(0xFF1B5E20),
-                        width: 1.5,
-                      ),
-                      color: hasBackground ? null : const Color(0xFFF4F7EF),
-                      image: hasBackground
-                          ? DecorationImage(
-                              image: NetworkImage(profileBackground),
-                              fit: BoxFit.cover,
-                            )
-                          : null,
+                      color: hasBackground ? Colors.black.withOpacity(0.18) : null,
                     ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(22),
-                      child: Stack(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
                         children: [
-                          Positioned.fill(
-                            child: Container(
-                              decoration: BoxDecoration(
-                                gradient: hasBackground
-                                    ? LinearGradient(
-                                        begin: Alignment.topCenter,
-                                        end: Alignment.bottomCenter,
-                                        colors: [
-                                          Colors.black.withOpacity(0.28),
-                                          Colors.black.withOpacity(0.14),
-                                          Colors.black.withOpacity(0.08),
-                                        ],
-                                      )
-                                    : null,
-                                color: hasBackground ? null : Colors.white,
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            top: 12,
-                            right: 12,
+                          Align(
+                            alignment: Alignment.topRight,
                             child: FilledButton.icon(
                               onPressed:
                                   _bgUploading ? null : _pickProfileBackground,
                               icon: _bgUploading
-                                  ? const LeafSpinner(
-                                      size: 18,
-                                      color: Colors.white,
-                                    )
+                                  ? const LeafSpinner(size: 18, color: Colors.white)
                                   : const Icon(Icons.image, size: 18),
-                              label: Text(
-                                _bgUploading ? 'Загрузка...' : 'Фон',
-                              ),
+                              label: Text(_bgUploading ? 'Загрузка...' : 'Фон'),
                               style: FilledButton.styleFrom(
-                                backgroundColor: Colors.black.withOpacity(0.58),
+                                backgroundColor: Colors.black.withOpacity(0.55),
                                 foregroundColor: Colors.white,
                               ),
                             ),
                           ),
-                          Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              children: [
-                                Stack(
-                                  children: [
-                                    CircleAvatar(
-                                      radius: 38,
-                                      backgroundColor: const Color(0xFFC8F0A4),
-                                      backgroundImage: avatarUrl.isNotEmpty
-                                          ? NetworkImage(avatarUrl)
-                                          : null,
-                                      child: avatarUrl.isEmpty
-                                          ? const Icon(Icons.person, size: 38)
-                                          : null,
+                          Stack(
+                            children: [
+                              CircleAvatar(
+                                radius: 38,
+                                backgroundColor: const Color(0xFFC8F0A4),
+                                backgroundImage: avatarUrl.isNotEmpty
+                                    ? NetworkImage(avatarUrl)
+                                    : null,
+                                child: avatarUrl.isEmpty
+                                    ? const Icon(Icons.person, size: 38)
+                                    : null,
+                              ),
+                              Positioned(
+                                right: 0,
+                                bottom: 0,
+                                child: InkWell(
+                                  onTap: _avatarUploading ? null : _pickAvatar,
+                                  borderRadius: BorderRadius.circular(999),
+                                  child: Container(
+                                    width: 30,
+                                    height: 30,
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFF466E2D),
+                                      shape: BoxShape.circle,
                                     ),
-                                    Positioned(
-                                      right: 0,
-                                      bottom: 0,
-                                      child: InkWell(
-                                        onTap: _avatarUploading
-                                            ? null
-                                            : _pickAvatar,
-                                        borderRadius:
-                                            BorderRadius.circular(999),
-                                        child: Container(
-                                          width: 30,
-                                          height: 30,
-                                          decoration: const BoxDecoration(
-                                            color: Color(0xFF466E2D),
-                                            shape: BoxShape.circle,
+                                    child: _avatarUploading
+                                        ? const Center(
+                                            child: LeafSpinner(
+                                              size: 14,
+                                              color: Colors.white,
+                                            ),
+                                          )
+                                        : const Icon(
+                                            Icons.camera_alt,
+                                            size: 16,
+                                            color: Colors.white,
                                           ),
-                                          child: _avatarUploading
-                                              ? const Center(
-                                                  child: LeafSpinner(
-                                                    size: 14,
-                                                    color: Colors.white,
-                                                  ),
-                                                )
-                                              : const Icon(
-                                                  Icons.camera_alt,
-                                                  size: 16,
-                                                  color: Colors.white,
-                                                ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: hasBackground
-                                        ? Colors.white.withOpacity(0.74)
-                                        : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    name,
-                                    style: const TextStyle(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.w700,
-                                      color: Colors.black,
-                                    ),
                                   ),
                                 ),
-                                const SizedBox(height: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: hasBackground
-                                        ? Colors.white.withOpacity(0.64)
-                                        : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Text(
-                                    user.email ?? '-',
-                                    style: const TextStyle(
-                                      color: Colors.black87,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  alignment: WrapAlignment.center,
-                                  children: [
-                                    _GlassInfoChip(
-                                      icon: Icons.star_outline,
-                                      text: '${rating.toStringAsFixed(1)} ⭐',
-                                    ),
-                                    _GlassInfoChip(
-                                      icon: Icons.reviews_outlined,
-                                      text: '$ratingCount оценок',
-                                    ),
-                                    _GlassInfoChip(
-                                      icon: Icons.edit_note,
-                                      text: '$createdRequestsCount заявок',
-                                    ),
-                                    _GlassInfoChip(
-                                      icon: Icons.volunteer_activism_outlined,
-                                      text: '$volunteerHelpsCount помощи',
-                                    ),
-                                  ],
-                                ),
-                                if (bio.isNotEmpty) ...[
-                                  const SizedBox(height: 14),
-                                  Container(
-                                    width: double.infinity,
-                                    padding: const EdgeInsets.all(14),
-                                    decoration: BoxDecoration(
-                                      color: adaptiveBioColor.withOpacity(0.95),
-                                      borderRadius: BorderRadius.circular(14),
-                                      border: Border.all(
-                                        color: Colors.black.withOpacity(0.08),
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.06),
-                                          blurRadius: 8,
-                                          offset: const Offset(0, 2),
-                                        ),
-                                      ],
-                                    ),
-                                    child: Text(
-                                      bio,
-                                      style: TextStyle(
-                                        height: 1.35,
-                                        color: bioTextColor,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            name,
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                              color: hasBackground ? Colors.white : null,
                             ),
                           ),
+                          const SizedBox(height: 6),
+                          Text(
+                            user.email ?? '-',
+                            style: TextStyle(
+                              color: hasBackground
+                                  ? Colors.white.withOpacity(0.92)
+                                  : (isDark ? Colors.white70 : Colors.black87),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            alignment: WrapAlignment.center,
+                            children: [
+                              _GlassInfoChip(
+                                icon: Icons.star_outline,
+                                text: '${rating.toStringAsFixed(1)} ⭐',
+                              ),
+                              _GlassInfoChip(
+                                icon: Icons.reviews_outlined,
+                                text: '$ratingCount оценок',
+                              ),
+                              _GlassInfoChip(
+                                icon: Icons.edit_note,
+                                text: '$createdRequestsCount заявок',
+                              ),
+                              _GlassInfoChip(
+                                icon: Icons.volunteer_activism_outlined,
+                                text: '$volunteerHelpsCount помощи',
+                              ),
+                            ],
+                          ),
+                          if (bio.isNotEmpty) ...[
+                            const SizedBox(height: 14),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: hasBackground
+                                    ? Colors.white.withOpacity(0.90)
+                                    : (isDark
+                                        ? Colors.white.withOpacity(0.06)
+                                        : Colors.black.withOpacity(0.03)),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Text(
+                                bio,
+                                style: TextStyle(
+                                  height: 1.35,
+                                  color: hasBackground
+                                      ? Colors.black87
+                                      : (isDark ? Colors.white : Colors.black87),
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => _editProfile(context, data),
-                          icon: const Icon(Icons.edit),
-                          label: const Text('Изменить'),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const AchievementsPage(),
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.emoji_events),
-                          label: const Text('Достижения'),
-                        ),
-                      ),
-                    ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _editProfile(context, data),
+                      icon: const Icon(Icons.edit),
+                      label: const Text('Изменить'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const AchievementsPage(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.emoji_events),
+                      label: const Text('Достижения'),
+                    ),
                   ),
                 ],
-              );
-            },
+              ),
+            ],
           );
         },
       ),
